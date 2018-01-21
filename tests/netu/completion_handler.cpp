@@ -216,7 +216,7 @@ BOOST_AUTO_TEST_CASE(invocation)
 
     p = ch3.invoke();
     BOOST_REQUIRE(p != nullptr);
-    BOOST_TEST(*p == 0xC0FFEA);
+    BOOST_TEST(*p == 0xC0FFEE);
 }
 
 BOOST_AUTO_TEST_CASE(comparison)
