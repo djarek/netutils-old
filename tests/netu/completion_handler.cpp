@@ -24,7 +24,6 @@ std::ostream& operator<<(std::ostream& stream, completion_handler<R(Ts...)> cons
 
 namespace
 {
-
 void(* const func_ptr)(void) = [](){};
 } // namespace
 
@@ -146,8 +145,10 @@ BOOST_AUTO_TEST_CASE(allocation)
     BOOST_CHECK_THROW(ch = ff, allocation_failure);
     BOOST_TEST(!ch);
     BOOST_TEST(ch == nullptr);
+    BOOST_TEST(ctrl.allocatons_left == 0);
+    BOOST_TEST(ctrl.constructions_left == 0);
 
-    ctrl.allocatons_left++;
+    ctrl.allocatons_left = 1;
     BOOST_CHECK_THROW(ch = ff, construction_failure);
     BOOST_TEST(!ch);
     BOOST_TEST(ch == nullptr);
