@@ -10,7 +10,8 @@
 #ifndef NETU_COMPLETION_HANDLER_HPP
 #define NETU_COMPLETION_HANDLER_HPP
 
-#include <boost/asio/associated_allocator.hpp>
+#include <netu/detail/allocators.hpp>
+
 #include <boost/core/ignore_unused.hpp>
 #include <boost/core/pointer_traits.hpp>
 #include <functional>
@@ -34,61 +35,12 @@ T&& move_if_not_ref(T&& t, std::false_type)
     return std::move(t);
 }
 
-namespace allocators
-{
-
-
-template <typename T, typename U>
-using rebind_t = typename std::allocator_traits<boost::asio::associated_allocator_t<T>>::template rebind_alloc<U>;
-
-template <typename ReboundType, typename T>
-auto rebind_associated(T const& t) noexcept -> rebind_t<T, ReboundType>
-{
-    auto alloc = boost::asio::get_associated_allocator(t);
-    using rebound_alloc_t = typename std::allocator_traits<decltype(alloc)>::template rebind_alloc<ReboundType>;
-    return rebound_alloc_t{alloc};
-}
-
-template <typename Allocator>
-struct deallocator
-{
-    using pointer = typename std::allocator_traits<Allocator>::pointer;
-
-    deallocator(Allocator& alloc, std::size_t n) noexcept:
-        alloc_{alloc},
-        n_{n}
-    {
-    }
-
-    void operator ()(pointer p) noexcept
-    {
-        std::allocator_traits<Allocator>::deallocate(alloc_, p, n_);
-    }
-
-    Allocator& alloc_;
-    std::size_t n_;
-};
-
-template <typename Allocator>
-using alloc_ptr = std::unique_ptr<typename std::allocator_traits<Allocator>::value_type, deallocator<Allocator>>;
-
-template <typename Allocator>
-auto allocate(Allocator& alloc, std::size_t n = 1) -> alloc_ptr<Allocator>
-{
-    return alloc_ptr<Allocator>{
-        std::allocator_traits<Allocator>::allocate(alloc, n),
-        deallocator<Allocator>{alloc, n}
-    };
-}
-
-} // namespace allocators
-
 template<class T, class U = T>
-T exchange(T& obj, U&& new_value)
+T exchange(T& obj, U&& val)
 {
-    T old_value = std::move(obj);
-    obj = std::forward<U>(new_value);
-    return old_value;
+    T old = std::move(obj);
+    obj = std::forward<U>(val);
+    return old;
 }
 
 template <typename From, typename To>
@@ -206,7 +158,8 @@ struct handler_manager<Handler, R(Ts...)>
                 auto handler = std::move(*h);
                 // Deallocation-before-invocation guarantee
                 hb = {};
-                return (handler)(detail::move_if_not_ref(std::forward<Ts>(args), std::is_reference<Ts>{}) ...);
+                return (handler)(detail::move_if_not_ref(std::forward<Ts>(args),
+                                                         std::is_reference<Ts>{}) ...);
             }
             default:
                 assert(false);
@@ -274,8 +227,6 @@ class completion_handler;
 template <typename R, typename... Ts>
 class completion_handler<R(Ts...)>
 {
-private:
-
 public:
     completion_handler() = default;
 
