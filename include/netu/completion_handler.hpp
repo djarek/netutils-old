@@ -146,11 +146,10 @@ struct completion_handler_base<R(Ts...)>
 template <typename Handler, typename R, typename... Ts>
 struct handler_manager<Handler, R(Ts...)>
 {
-    using handler_type = typename std::remove_reference<Handler>::type;
     using handler_base = completion_handler_base<R(Ts...)>;
     static R invoke(handler_op op, handler_base& hb, Ts... args)
     {
-        auto h = static_cast<handler_type*>(hb.storage_.void_ptr);
+        auto h = static_cast<Handler*>(hb.storage_.void_ptr);
         switch (op)
         {
             case handler_op::invoke:
@@ -168,8 +167,8 @@ struct handler_manager<Handler, R(Ts...)>
 
     static void manage(handler_base& hb)
     {
-        auto h = static_cast<handler_type*>(hb.storage_.void_ptr);
-        auto alloc = allocators::rebind_associated<handler_type>(*h);
+        auto h = static_cast<Handler*>(hb.storage_.void_ptr);
+        auto alloc = allocators::rebind_associated<Handler>(*h);
         using pointer_t = typename std::allocator_traits<decltype(alloc)>::pointer;
         auto fancy_ptr = boost::pointer_traits<pointer_t>::pointer_to(*h);
         std::allocator_traits<decltype(alloc)>::destroy(alloc, h);
@@ -212,10 +211,12 @@ completion_handler_base<Signature> allocate_handler(U(*p)(Ts...))
 template <typename Signature, typename Handler>
 completion_handler_base<Signature> allocate_handler(Handler&& handler)
 {
-    auto alloc = allocators::rebind_associated<typename std::remove_reference<Handler>::type>(handler);
+
+    using handler_type = typename std::remove_reference<Handler>::type;
+    auto alloc = allocators::rebind_associated<handler_type>(handler);
     auto tmp = detail::allocators::allocate(alloc);
     std::allocator_traits<decltype(alloc)>::construct(alloc, boost::to_address(tmp.get()), std::forward<Handler>(handler));
-    completion_handler_base<Signature> chb {tmp.release(), handler_manager<Handler, Signature>{}};
+    completion_handler_base<Signature> chb {tmp.release(), handler_manager<handler_type, Signature>{}};
     return chb;
 }
 
