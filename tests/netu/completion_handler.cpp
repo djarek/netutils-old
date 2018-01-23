@@ -11,6 +11,7 @@
 
 #include <boost/test/unit_test.hpp>
 #include <boost/make_unique.hpp>
+#include <boost/utility/string_view.hpp>
 
 namespace netu
 {
@@ -25,6 +26,12 @@ std::ostream& operator<<(std::ostream& stream, completion_handler<R(Ts...)> cons
 namespace
 {
 void(* const func_ptr)(void) = [](){};
+
+const char* test_func(const std::string&)
+{
+    return "success";
+}
+
 } // namespace
 
 struct allocation_failure : std::bad_alloc
@@ -249,6 +256,15 @@ BOOST_AUTO_TEST_CASE(swap_func)
     BOOST_TEST(l2_called == true);
     ch2.invoke();
     BOOST_TEST(l1_called == true);
+}
+
+BOOST_AUTO_TEST_CASE(incompatible_func_ptr)
+{
+    completion_handler<const char*(std::string)> ch;
+    ch = test_func;
+    boost::string_view str = ch.invoke("str");
+    BOOST_TEST(str == "success");
+
 }
 
 } // namespace netu

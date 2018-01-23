@@ -13,7 +13,6 @@
 #include <netu/detail/allocators.hpp>
 #include <netu/detail/type_traits.hpp>
 
-#include <boost/core/ignore_unused.hpp>
 #include <boost/core/pointer_traits.hpp>
 #include <functional>
 #include <cassert>
@@ -37,104 +36,59 @@ template <typename Handler, typename Signature>
 struct handler_manager;
 
 template <typename Signature>
-struct completion_handler_base;
+struct handler_base;
+
+union raw_handler_ptr
+{
+    raw_handler_ptr() = default;
+
+    explicit raw_handler_ptr(void* ptr) noexcept:
+        void_ptr{ptr}
+    {
+    }
+
+    template<typename U, typename... Vs>
+    explicit raw_handler_ptr(U(*fptr)(Vs...)) noexcept:
+        func_ptr{reinterpret_cast<void(*)()>(fptr)}
+    {
+    }
+
+    void* void_ptr;
+    void(*func_ptr)(); // never call this without casting to original type
+};
 
 template <typename R, typename... Ts>
-struct completion_handler_base<R(Ts...)>
+struct handler_base<R(Ts...)>
 {
-    union storage_type
-    {
-        void* void_ptr;
-        R(*func_ptr)(Ts...);
-    };
+    using management_func_t = void(*)(raw_handler_ptr, handler_base&) noexcept;
+    using invocation_func_t = R(*)(handler_op, raw_handler_ptr, handler_base&, Ts...);
 
-    using management_func_t = void(*)(completion_handler_base&);
-    using invocation_func_t = R(*)(handler_op, completion_handler_base&, Ts...);
-
-    completion_handler_base() = default;
+    handler_base() = default;
 
     template <typename Handler>
-    completion_handler_base(void* ptr, handler_manager<Handler, R(Ts...)> hm) noexcept:
+    explicit handler_base(handler_manager<Handler, R(Ts...)> hm) noexcept:
         invoke_{hm.invoke},
         manage_{hm.manage}
     {
-        storage_.void_ptr = ptr;
-    }
-
-    template <typename Handler>
-    completion_handler_base(R(*ptr)(Ts...), handler_manager<Handler, R(Ts...)> hm) noexcept:
-        invoke_{hm.invoke},
-        manage_{hm.manage}
-    {
-        storage_.func_ptr = ptr;
-    }
-
-    completion_handler_base(completion_handler_base const& other) = delete;
-
-    completion_handler_base(completion_handler_base&& other) noexcept:
-        invoke_{exchange(other.invoke_, nullptr)},
-        manage_{exchange(other.manage_, nullptr)},
-        storage_{other.storage_}
-    {
-    }
-
-    ~completion_handler_base()
-    {
-        reset();
-    }
-
-    completion_handler_base& operator=(completion_handler_base const& other) = delete;
-
-    completion_handler_base& operator=(completion_handler_base&& other) noexcept
-    {
-        completion_handler_base tmp{std::move(other)};
-        tmp.swap(*this);
-        return *this;
-    }
-
-    void swap(completion_handler_base& other) noexcept
-    {
-        using std::swap;
-        swap(invoke_, other.invoke_);
-        swap(manage_, other.manage_);
-        swap(storage_, other.storage_);
-    }
-
-    void reset()
-    {
-        if (manage_)
-        {
-            manage_(*this);
-            invoke_ = nullptr;
-            manage_ = nullptr;
-        }
-    }
-
-    template <typename... Us>
-    R invoke(Us&&... us)
-    {
-        return invoke_(handler_op::invoke, *this, std::forward<Us>(us)...);
     }
 
     invocation_func_t invoke_ = nullptr;
     management_func_t manage_ = nullptr;
-    storage_type storage_;
 };
 
 template <typename Handler, typename R, typename... Ts>
 struct handler_manager<Handler, R(Ts...)>
 {
-    using handler_base = completion_handler_base<R(Ts...)>;
-    static R invoke(handler_op op, handler_base& hb, Ts... args)
+    static R invoke(handler_op op, raw_handler_ptr ptr, handler_base<R(Ts...)>& hb, Ts... args)
     {
-        auto h = static_cast<Handler*>(hb.storage_.void_ptr);
+        auto h = static_cast<Handler*>(ptr.void_ptr);
         switch (op)
         {
             case handler_op::invoke:
             {
                 auto handler = std::move(*h);
                 // Deallocation-before-invocation guarantee
-                hb = {};
+                manage(ptr, hb);
                 return (handler)(detail::move_if_not_ref(std::forward<Ts>(args),
                                                          std::is_reference<Ts>{}) ...);
             }
@@ -143,30 +97,29 @@ struct handler_manager<Handler, R(Ts...)>
         }
     }
 
-    static void manage(handler_base& hb)
+    static void manage(raw_handler_ptr ptr, handler_base<R(Ts...)>& hb) noexcept
     {
-        auto h = static_cast<Handler*>(hb.storage_.void_ptr);
+        auto h = static_cast<Handler*>(ptr.void_ptr);
         auto alloc = allocators::rebind_associated<Handler>(*h);
         using pointer_t = typename std::allocator_traits<decltype(alloc)>::pointer;
         auto fancy_ptr = boost::pointer_traits<pointer_t>::pointer_to(*h);
         std::allocator_traits<decltype(alloc)>::destroy(alloc, h);
         std::allocator_traits<decltype(alloc)>::deallocate(alloc, fancy_ptr, 1);
+        hb = {};
     }
 };
 
 template <typename U, typename... Vs, typename R, typename... Ts>
 struct handler_manager<U(*)(Vs...), R(Ts...)>
 {
-    using handler_base = completion_handler_base<R(Ts...)>;
-
-    static R invoke(handler_op op, handler_base& hb, Ts... args)
+    static R invoke(handler_op op, raw_handler_ptr ptr, handler_base<R(Ts...)>& hb, Ts... args)
     {
-        auto h = hb.storage_.func_ptr;
+        auto h = reinterpret_cast<U(*)(Vs...)>(ptr.func_ptr);
         switch (op)
         {
             case handler_op::invoke:
             {
-                hb = {};
+                manage(ptr, hb);
                 return (h)(detail::move_if_not_ref(std::forward<Ts>(args), std::is_reference<Ts>{}) ...);
             }
             default:
@@ -174,28 +127,27 @@ struct handler_manager<U(*)(Vs...), R(Ts...)>
         }
     }
 
-    static void manage(handler_base& hb)
+    static void manage(raw_handler_ptr, handler_base<R(Ts...)>& hb) noexcept
     {
-        boost::ignore_unused(hb);
+        hb = {};
     }
 };
 
 template <typename Signature, typename U, typename... Ts>
-completion_handler_base<Signature> allocate_handler(U(*p)(Ts...))
+std::pair<raw_handler_ptr, handler_base<Signature>> allocate_handler(U(*p)(Ts...)) noexcept
 {
-    return completion_handler_base<Signature>{p, handler_manager<decltype(p), Signature>{}};
+    return {raw_handler_ptr{p}, handler_base<Signature>{handler_manager<decltype(p), Signature>{}}};
 }
 
 template <typename Signature, typename Handler>
-completion_handler_base<Signature> allocate_handler(Handler&& handler)
+std::pair<raw_handler_ptr, handler_base<Signature>> allocate_handler(Handler&& handler)
 {
 
     using handler_type = typename std::remove_reference<Handler>::type;
-    auto alloc = allocators::rebind_associated<handler_type>(handler);
+    auto alloc = detail::allocators::rebind_associated<handler_type>(handler);
     auto tmp = detail::allocators::allocate(alloc);
     std::allocator_traits<decltype(alloc)>::construct(alloc, boost::to_address(tmp.get()), std::forward<Handler>(handler));
-    completion_handler_base<Signature> chb {tmp.release(), handler_manager<handler_type, Signature>{}};
-    return chb;
+    return {raw_handler_ptr{tmp.release()}, handler_base<Signature>{handler_manager<handler_type, Signature>{}}};
 }
 
 } // namespace detail
@@ -210,19 +162,21 @@ public:
     completion_handler() = default;
 
     completion_handler(completion_handler const& ) = delete;
-    completion_handler(completion_handler && ) = default;
+    completion_handler(completion_handler && ) noexcept;
 
     template <typename Handler, class = detail::disable_same_conversion_t<Handler, completion_handler>>
     completion_handler(Handler&& handler);
 
-    completion_handler& operator=(completion_handler && ) = default;
+    completion_handler& operator=(completion_handler && ) noexcept;
 
     completion_handler& operator=(completion_handler const& ) = delete;
 
-    template <typename Handler, class = detail::disable_same_conversion_t<Handler, completion_handler>>
-    auto operator=(Handler&& handler) -> decltype(*this);
+    ~completion_handler();
 
-    auto operator=(std::nullptr_t) noexcept -> decltype(*this);
+    template <typename Handler, class = detail::disable_same_conversion_t<Handler, completion_handler>>
+    completion_handler& operator=(Handler&& handler);
+
+    completion_handler& operator=(std::nullptr_t) noexcept;
 
     void swap(completion_handler& other) noexcept;
 
@@ -247,28 +201,55 @@ public:
     friend bool operator!=(std::nullptr_t lhs, completion_handler<U(Vs...)> const& rhs) noexcept;
 
 private:
-    detail::completion_handler_base<R(Ts...)> base_;
+    detail::raw_handler_ptr hptr_;
+    detail::handler_base<R(Ts...)> base_;
 };
 
 template <typename R, typename... Ts>
 template <typename Handler, class = detail::disable_same_conversion_t<Handler, completion_handler<R(Ts...)>>>
-completion_handler<R(Ts...)>::completion_handler(Handler&& handler):
-    base_{detail::allocate_handler<R(Ts...)>(std::forward<Handler>(handler))}
+completion_handler<R(Ts...)>::completion_handler(Handler&& handler)
 {
+    std::tie(hptr_, base_) = detail::allocate_handler<R(Ts...)>(std::forward<Handler>(handler));
+}
+
+template <typename R, typename... Ts>
+completion_handler<R(Ts...)>::completion_handler(completion_handler&& other) noexcept:
+    hptr_{other.hptr_},
+    base_{detail::exchange(other.base_, {})}
+{
+}
+
+template <typename R, typename... Ts>
+completion_handler<R(Ts...)>::~completion_handler()
+{
+    if (base_.manage_)
+    {
+        base_.manage_(hptr_, base_);
+    }
 }
 
 template <typename R, typename... Ts>
 template <typename Handler, class = detail::disable_same_conversion_t<Handler, completion_handler<R(Ts...)>>>
-auto completion_handler<R(Ts...)>::operator=(Handler&& handler) -> decltype(*this)
+completion_handler<R(Ts...)>& completion_handler<R(Ts...)>::operator=(Handler&& handler)
 {
-    base_ = detail::allocate_handler<R(Ts...)>(std::forward<Handler>(handler));
+    completion_handler tmp{std::forward<Handler>(handler)};
+    this->swap(tmp);
     return *this;
 }
 
 template <typename R, typename... Ts>
-auto completion_handler<R(Ts...)>::operator=(std::nullptr_t) noexcept -> decltype(*this)
+completion_handler<R(Ts...)>& completion_handler<R(Ts...)>::operator=(completion_handler&& other) noexcept
 {
-    base_.reset();
+    completion_handler tmp{std::move(other)};
+    this->swap(tmp);
+    return *this;
+}
+
+template <typename R, typename... Ts>
+completion_handler<R(Ts...)>& completion_handler<R(Ts...)>::operator=(std::nullptr_t) noexcept
+{
+    completion_handler tmp;
+    this->swap(tmp);
     return *this;
 }
 
@@ -276,7 +257,8 @@ template <typename R, typename... Ts>
 void completion_handler<R(Ts...)>::swap(completion_handler& other) noexcept
 {
     using std::swap;
-    base_.swap(other.base_);
+    swap(hptr_, other.hptr_);
+    swap(base_, other.base_);
 }
 
 template <typename R, typename... Ts>
@@ -288,7 +270,7 @@ R completion_handler<R(Ts...)>::invoke(Args&&... args)
         throw std::bad_function_call{};
     }
 
-    return base_.invoke(std::forward<Args>(args)...);
+    return base_.invoke_(detail::handler_op::invoke, hptr_, base_, std::forward<Args>(args)...);
 }
 
 template <typename R, typename... Ts>
