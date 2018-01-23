@@ -11,6 +11,7 @@
 #define NETU_COMPLETION_HANDLER_HPP
 
 #include <netu/detail/allocators.hpp>
+#include <netu/detail/type_traits.hpp>
 
 #include <boost/core/ignore_unused.hpp>
 #include <boost/core/pointer_traits.hpp>
@@ -22,29 +23,6 @@ namespace netu
 
 namespace detail
 {
-
-template <typename T>
-T& move_if_not_ref(T& t, std::true_type)
-{
-    return t;
-}
-
-template <typename T>
-T&& move_if_not_ref(T&& t, std::false_type)
-{
-    return std::move(t);
-}
-
-template<class T, class U = T>
-T exchange(T& obj, U&& val)
-{
-    T old = std::move(obj);
-    obj = std::forward<U>(val);
-    return old;
-}
-
-template <typename From, typename To>
-using disable_same_conversion_t = typename std::enable_if<!std::is_same<To, typename std::decay<From>::type>::value>::type;
 
 enum class handler_op
 {
@@ -334,7 +312,7 @@ bool operator!=(completion_handler<R(Ts...)> const& lhs, std::nullptr_t rhs) noe
 template <typename R, typename... Ts>
 bool operator!=(std::nullptr_t lhs, completion_handler<R(Ts...)> const& rhs) noexcept
 {
-    return !(rhs == lhs);
+    return rhs != lhs;
 }
 
 template <typename R, typename... Ts>
