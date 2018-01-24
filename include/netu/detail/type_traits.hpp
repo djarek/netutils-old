@@ -18,20 +18,6 @@ namespace netu
 namespace detail
 {
 
-template<typename T>
-T&
-move_if_not_ref(T& t, std::true_type)
-{
-    return t;
-}
-
-template<typename T>
-T&&
-move_if_not_ref(T&& t, std::false_type)
-{
-    return std::move(t);
-}
-
 template<class T, class U = T>
 T
 exchange(T& obj, U&& val)

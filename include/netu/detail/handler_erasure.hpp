@@ -95,8 +95,7 @@ struct handler_manager<Handler, R(Ts...)>
                 auto handler = std::move(*h);
                 // Deallocation-before-invocation guarantee
                 manage(ptr, hb);
-                return (handler)(detail::move_if_not_ref(
-                  std::forward<Ts>(args), std::is_reference<Ts>{})...);
+                return (handler)(std::forward<Ts>(args)...);
             }
             default:
                 BOOST_ASSERT(false);
@@ -131,8 +130,7 @@ struct handler_manager<U (*)(Vs...), R(Ts...)>
             case handler_op::invoke:
             {
                 manage(ptr, hb);
-                return (h)(detail::move_if_not_ref(std::forward<Ts>(args),
-                                                   std::is_reference<Ts>{})...);
+                return (h)(std::forward<Ts>(args)...);
             }
             default:
                 BOOST_ASSERT(false);
@@ -160,8 +158,7 @@ struct handler_manager<std::reference_wrapper<Handler>, R(Ts...)>
             case handler_op::invoke:
             {
                 manage(ptr, hb);
-                return (*h)(detail::move_if_not_ref(
-                  std::forward<Ts>(args), std::is_reference<Ts>{})...);
+                return (*h)(std::forward<Ts>(args)...);
             }
             default:
                 BOOST_ASSERT(false);

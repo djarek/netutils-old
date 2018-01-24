@@ -286,4 +286,19 @@ BOOST_AUTO_TEST_CASE(reference_wrapper)
     BOOST_TEST(ch == nullptr);
 }
 
+BOOST_AUTO_TEST_CASE(rvalue_ref)
+{
+    completion_handler<int(std::unique_ptr<int> &&)> ch;
+    ch = [](std::unique_ptr<int> ptr) {
+        BOOST_REQUIRE(ptr != nullptr);
+        BOOST_TEST(*ptr == 0xC0FFEE);
+        return 0xDEADBEEF;
+    };
+
+    BOOST_TEST(ch != nullptr);
+    auto result = ch.invoke(boost::make_unique<int>(0xC0FFEE));
+    BOOST_TEST(result == 0xDEADBEEF);
+    BOOST_TEST(ch == nullptr);
+}
+
 } // namespace netu
