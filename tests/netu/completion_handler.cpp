@@ -27,11 +27,6 @@ namespace
 {
 void(* const func_ptr)(void) = [](){};
 
-const char* test_func(const std::string&)
-{
-    return "success";
-}
-
 } // namespace
 
 struct allocation_failure : std::bad_alloc
@@ -258,12 +253,17 @@ BOOST_AUTO_TEST_CASE(swap_func)
     BOOST_TEST(l1_called == true);
 }
 
+namespace
+{
+const char* incompatible_func(const std::string&) { return "success"; }
+} // namespace
+
 BOOST_AUTO_TEST_CASE(incompatible_func_ptr)
 {
-    completion_handler<const char*(std::string)> ch;
-    ch = test_func;
+    completion_handler<const char*(std::string)> ch = incompatible_func;
     boost::string_view str = ch.invoke("str");
     BOOST_TEST(str == "success");
+    BOOST_TEST(ch == nullptr);
 
 }
 
