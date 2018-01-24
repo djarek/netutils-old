@@ -80,6 +80,7 @@ struct handler_manager<Handler, R(Ts...)>
     static R invoke(handler_op op, raw_handler_ptr ptr, handler_base<R(Ts...)>& hb, Ts... args)
     {
         auto h = static_cast<Handler*>(ptr.void_ptr);
+        BOOST_ASSERT(h != nullptr);
         switch (op)
         {
             case handler_op::invoke:
@@ -113,6 +114,7 @@ struct handler_manager<U(*)(Vs...), R(Ts...)>
     static R invoke(handler_op op, raw_handler_ptr ptr, handler_base<R(Ts...)>& hb, Ts... args)
     {
         auto h = reinterpret_cast<U(*)(Vs...)>(ptr.func_ptr);
+        BOOST_ASSERT(h != nullptr);
         switch (op)
         {
             case handler_op::invoke:
@@ -131,6 +133,32 @@ struct handler_manager<U(*)(Vs...), R(Ts...)>
     }
 };
 
+template <typename Handler, typename R, typename... Ts>
+struct handler_manager<std::reference_wrapper<Handler>, R(Ts...)>
+{
+    static R invoke(handler_op op, raw_handler_ptr ptr, handler_base<R(Ts...)>& hb, Ts... args)
+    {
+        auto h = static_cast<Handler*>(ptr.void_ptr);
+        BOOST_ASSERT(h != nullptr);
+        switch (op)
+        {
+            case handler_op::invoke:
+            {
+                manage(ptr, hb);
+                return (*h)(detail::move_if_not_ref(std::forward<Ts>(args), std::is_reference<Ts>{}) ...);
+            }
+            default:
+                BOOST_ASSERT(false);
+        }
+    }
+
+    static void manage(raw_handler_ptr, handler_base<R(Ts...)>& hb) noexcept
+    {
+        hb = {};
+    }
+};
+
+
 template <typename Signature, typename U, typename... Ts>
 std::pair<raw_handler_ptr, handler_base<Signature>> allocate_handler(U(*p)(Ts...)) noexcept
 {
@@ -146,6 +174,12 @@ std::pair<raw_handler_ptr, handler_base<Signature>> allocate_handler(Handler&& h
     auto tmp = detail::allocators::allocate(alloc);
     std::allocator_traits<decltype(alloc)>::construct(alloc, boost::to_address(tmp.get()), std::forward<Handler>(handler));
     return {raw_handler_ptr{tmp.release()}, handler_base<Signature>{handler_manager<handler_type, Signature>{}}};
+}
+
+template <typename Signature, typename Handler>
+std::pair<raw_handler_ptr, handler_base<Signature>> allocate_handler(std::reference_wrapper<Handler> handler)
+{
+    return {raw_handler_ptr{&handler.get()}, handler_base<Signature>{handler_manager<std::reference_wrapper<Handler>, Signature>{}}};
 }
 
 } // namespace detail

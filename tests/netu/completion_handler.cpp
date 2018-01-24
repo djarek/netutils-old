@@ -11,7 +11,6 @@
 
 #include <boost/test/unit_test.hpp>
 #include <boost/make_unique.hpp>
-#include <boost/utility/string_view.hpp>
 
 namespace netu
 {
@@ -255,16 +254,42 @@ BOOST_AUTO_TEST_CASE(swap_func)
 
 namespace
 {
-const char* incompatible_func(const std::string&) { return "success"; }
+int incompatible_func(const std::string&) { return 0xDEADBEEF; }
 } // namespace
 
 BOOST_AUTO_TEST_CASE(incompatible_func_ptr)
 {
-    completion_handler<const char*(std::string)> ch = incompatible_func;
-    boost::string_view str = ch.invoke("str");
-    BOOST_TEST(str == "success");
+    completion_handler<int(std::string)> ch = incompatible_func;
+    auto str = ch.invoke("str");
+    BOOST_TEST(str == 0xDEADBEEF);
     BOOST_TEST(ch == nullptr);
+}
 
+namespace
+{
+
+struct ref_wrapper_functor
+{
+    int operator()();
+};
+
+ref_wrapper_functor rwf;
+
+int ref_wrapper_functor::operator()()
+{
+    BOOST_TEST(this == &rwf);
+    return 0xDEADBEEF;
+}
+
+} // namespace
+
+BOOST_AUTO_TEST_CASE(reference_wrapper)
+{
+    completion_handler<int()> ch = std::ref(rwf);
+    BOOST_TEST(ch != nullptr);
+    auto result = ch.invoke();
+    BOOST_TEST(result == 0xDEADBEEF);
+    BOOST_TEST(ch == nullptr);
 }
 
 } // namespace netu
