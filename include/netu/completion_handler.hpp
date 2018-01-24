@@ -31,7 +31,7 @@ public:
     completion_handler(completion_handler const& ) = delete;
     completion_handler(completion_handler && ) noexcept;
 
-    template <typename Handler, class = detail::disable_same_conversion_t<Handler, completion_handler>>
+    template <typename Handler, class = detail::disable_conversion_t<Handler, completion_handler>>
     completion_handler(Handler&& handler);
 
     completion_handler& operator=(completion_handler && ) noexcept;
@@ -40,7 +40,7 @@ public:
 
     ~completion_handler();
 
-    template <typename Handler, class = detail::disable_same_conversion_t<Handler, completion_handler>>
+    template <typename Handler, class = detail::disable_conversion_t<Handler, completion_handler>>
     completion_handler& operator=(Handler&& handler);
 
     completion_handler& operator=(std::nullptr_t) noexcept;

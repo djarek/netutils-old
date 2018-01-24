@@ -39,7 +39,7 @@ T exchange(T& obj, U&& val)
 }
 
 template <typename From, typename To>
-using disable_same_conversion_t = typename std::enable_if<!std::is_same<To, typename std::decay<From>::type>::value>::type;
+using disable_conversion_t = typename std::enable_if<!std::is_same<To, typename std::decay<From>::type>::value>::type;
 
 
 } // namespace detail

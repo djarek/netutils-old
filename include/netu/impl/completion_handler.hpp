@@ -7,7 +7,7 @@ namespace netu
 {
 
 template <typename R, typename... Ts>
-template <typename Handler, class = detail::disable_same_conversion_t<Handler, completion_handler<R(Ts...)>>>
+template <typename Handler, class = detail::disable_conversion_t<Handler, completion_handler<R(Ts...)>>>
 completion_handler<R(Ts...)>::completion_handler(Handler&& handler)
 {
     std::tie(hptr_, base_) = detail::allocate_handler<R(Ts...)>(std::forward<Handler>(handler));
@@ -30,7 +30,7 @@ completion_handler<R(Ts...)>::~completion_handler()
 }
 
 template <typename R, typename... Ts>
-template <typename Handler, class = detail::disable_same_conversion_t<Handler, completion_handler<R(Ts...)>>>
+template <typename Handler, class = detail::disable_conversion_t<Handler, completion_handler<R(Ts...)>>>
 completion_handler<R(Ts...)>& completion_handler<R(Ts...)>::operator=(Handler&& handler)
 {
     completion_handler tmp{std::forward<Handler>(handler)};
