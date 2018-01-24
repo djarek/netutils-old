@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2017 Damian Jarek (damian dot jarek93 at gmail dot com)
+// Copyright (c) 2018 Damian Jarek (damian dot jarek93 at gmail dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -9,6 +9,8 @@
 
 #ifndef NETU_DETAIL_HANDLER_ERASURE_HPP
 #define NETU_DETAIL_HANDLER_ERASURE_HPP
+
+#include <netu/detail/type_traits.hpp>
 
 #include <boost/asio/associated_allocator.hpp>
 #include <boost/core/pointer_traits.hpp>

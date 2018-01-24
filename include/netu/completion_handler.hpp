@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2017 Damian Jarek (damian dot jarek93 at gmail dot com)
+// Copyright (c) 2018 Damian Jarek (damian dot jarek93 at gmail dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -12,7 +12,6 @@
 
 #include <netu/detail/allocators.hpp>
 #include <netu/detail/handler_erasure.hpp>
-#include <netu/detail/type_traits.hpp>
 
 #include <functional>
 
@@ -49,8 +48,8 @@ class completion_handler<R(Ts...)>
 
     void swap(completion_handler& other) noexcept;
 
-    template<typename... DeducedArgs>
-    R invoke(DeducedArgs&&... args);
+    template<typename... Args>
+    R invoke(Args&&... args);
 
     explicit operator bool() const noexcept;
 
