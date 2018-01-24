@@ -18,29 +18,32 @@ namespace netu
 namespace detail
 {
 
-template <typename T>
-T& move_if_not_ref(T& t, std::true_type)
+template<typename T>
+T&
+move_if_not_ref(T& t, std::true_type)
 {
     return t;
 }
 
-template <typename T>
-T&& move_if_not_ref(T&& t, std::false_type)
+template<typename T>
+T&&
+move_if_not_ref(T&& t, std::false_type)
 {
     return std::move(t);
 }
 
 template<class T, class U = T>
-T exchange(T& obj, U&& val)
+T
+exchange(T& obj, U&& val)
 {
     T old = std::move(obj);
     obj = std::forward<U>(val);
     return old;
 }
 
-template <typename From, typename To>
-using disable_conversion_t = typename std::enable_if<!std::is_same<To, typename std::decay<From>::type>::value>::type;
-
+template<typename From, typename To>
+using disable_conversion_t = typename std::enable_if<
+  !std::is_same<To, typename std::decay<From>::type>::value>::type;
 
 } // namespace detail
 } // namespace netu

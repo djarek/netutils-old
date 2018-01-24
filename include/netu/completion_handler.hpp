@@ -11,60 +11,66 @@
 #define NETU_COMPLETION_HANDLER_HPP
 
 #include <netu/detail/allocators.hpp>
-#include <netu/detail/type_traits.hpp>
 #include <netu/detail/handler_erasure.hpp>
+#include <netu/detail/type_traits.hpp>
 
 #include <functional>
 
 namespace netu
 {
 
-template <typename Signature>
+template<typename Signature>
 class completion_handler;
 
-template <typename R, typename... Ts>
+template<typename R, typename... Ts>
 class completion_handler<R(Ts...)>
 {
-public:
+  public:
     completion_handler() = default;
 
-    completion_handler(completion_handler const& ) = delete;
-    completion_handler(completion_handler && ) noexcept;
+    completion_handler(completion_handler const&) = delete;
+    completion_handler(completion_handler&&) noexcept;
 
-    template <typename Handler, class = detail::disable_conversion_t<Handler, completion_handler>>
+    template<typename Handler,
+             class = detail::disable_conversion_t<Handler, completion_handler>>
     completion_handler(Handler&& handler);
 
-    completion_handler& operator=(completion_handler && ) noexcept;
+    completion_handler& operator=(completion_handler&&) noexcept;
 
-    completion_handler& operator=(completion_handler const& ) = delete;
+    completion_handler& operator=(completion_handler const&) = delete;
 
     ~completion_handler();
 
-    template <typename Handler, class = detail::disable_conversion_t<Handler, completion_handler>>
+    template<typename Handler,
+             class = detail::disable_conversion_t<Handler, completion_handler>>
     completion_handler& operator=(Handler&& handler);
 
     completion_handler& operator=(std::nullptr_t) noexcept;
 
     void swap(completion_handler& other) noexcept;
 
-    template <typename... DeducedArgs>
+    template<typename... DeducedArgs>
     R invoke(DeducedArgs&&... args);
 
     explicit operator bool() const noexcept;
 
-    template <typename U, typename... Vs>
-    friend bool operator==(completion_handler<U(Vs...)> const& lhs, std::nullptr_t) noexcept;
+    template<typename U, typename... Vs>
+    friend bool operator==(completion_handler<U(Vs...)> const& lhs,
+                           std::nullptr_t) noexcept;
 
-    template <typename U, typename... Vs>
-    friend bool operator==(std::nullptr_t lhs, completion_handler<U(Vs...)> const& rhs) noexcept;
+    template<typename U, typename... Vs>
+    friend bool operator==(std::nullptr_t lhs,
+                           completion_handler<U(Vs...)> const& rhs) noexcept;
 
-    template <typename U, typename... Vs>
-    friend bool operator!=(completion_handler<U(Vs...)> const& lhs, std::nullptr_t rhs) noexcept;
+    template<typename U, typename... Vs>
+    friend bool operator!=(completion_handler<U(Vs...)> const& lhs,
+                           std::nullptr_t rhs) noexcept;
 
-    template <typename U, typename... Vs>
-    friend bool operator!=(std::nullptr_t lhs, completion_handler<U(Vs...)> const& rhs) noexcept;
+    template<typename U, typename... Vs>
+    friend bool operator!=(std::nullptr_t lhs,
+                           completion_handler<U(Vs...)> const& rhs) noexcept;
 
-private:
+  private:
     detail::raw_handler_ptr hptr_;
     detail::handler_base<R(Ts...)> base_;
 };

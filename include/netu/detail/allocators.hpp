@@ -19,23 +19,26 @@ namespace detail
 namespace allocators
 {
 
-template <typename T, typename U>
-using rebound_alloc_t = typename std::allocator_traits<boost::asio::associated_allocator_t<T>>::template rebind_alloc<U>;
+template<typename T, typename U>
+using rebound_alloc_t = typename std::allocator_traits<
+  boost::asio::associated_allocator_t<T>>::template rebind_alloc<U>;
 
-template <typename ReboundType, typename T>
-auto rebind_associated(T const& t) noexcept -> rebound_alloc_t<T, ReboundType>
+template<typename ReboundType, typename T>
+auto
+rebind_associated(T const& t) noexcept -> rebound_alloc_t<T, ReboundType>
 {
-    return rebound_alloc_t<T, ReboundType>{boost::asio::get_associated_allocator(t)};
+    return rebound_alloc_t<T, ReboundType>{
+      boost::asio::get_associated_allocator(t)};
 }
 
-template <typename Allocator>
+template<typename Allocator>
 struct deallocator
 {
     using pointer = typename std::allocator_traits<Allocator>::pointer;
 
-    deallocator(Allocator& alloc, std::size_t n) noexcept:
-        alloc_{alloc},
-        n_{n}
+    deallocator(Allocator& alloc, std::size_t n) noexcept
+      : alloc_{alloc}
+      , n_{n}
     {
     }
 
@@ -48,16 +51,18 @@ struct deallocator
     std::size_t n_;
 };
 
-template <typename Allocator>
-using alloc_ptr = std::unique_ptr<typename std::allocator_traits<Allocator>::value_type, deallocator<Allocator>>;
+template<typename Allocator>
+using alloc_ptr =
+  std::unique_ptr<typename std::allocator_traits<Allocator>::value_type,
+                  deallocator<Allocator>>;
 
-template <typename Allocator>
-auto allocate(Allocator& alloc, std::size_t n = 1) -> alloc_ptr<Allocator>
+template<typename Allocator>
+auto
+allocate(Allocator& alloc, std::size_t n = 1) -> alloc_ptr<Allocator>
 {
     return alloc_ptr<Allocator>{
-        std::allocator_traits<Allocator>::allocate(alloc, n),
-        deallocator<Allocator>{alloc, n}
-    };
+      std::allocator_traits<Allocator>::allocate(alloc, n),
+      deallocator<Allocator>{alloc, n}};
 }
 
 } // namespace allocators
