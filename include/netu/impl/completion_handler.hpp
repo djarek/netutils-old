@@ -26,6 +26,12 @@ completion_handler<R(Ts...)>::completion_handler(Handler&& handler)
 }
 
 template<typename R, typename... Ts>
+completion_handler<R(Ts...)>::completion_handler(std::nullptr_t) noexcept
+  : completion_handler{}
+{
+}
+
+template<typename R, typename... Ts>
 completion_handler<R(Ts...)>::completion_handler(
   completion_handler&& other) noexcept
   : hptr_{other.hptr_}

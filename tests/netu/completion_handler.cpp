@@ -116,6 +116,9 @@ BOOST_AUTO_TEST_CASE(constructors)
     completion_handler<void(void)> ch{};
     BOOST_TEST(!ch);
 
+    completion_handler<void(void)> ch_nullptr{nullptr};
+    BOOST_TEST(!ch_nullptr);
+
     completion_handler<void(void)> ch_lambda{[]() {}};
     BOOST_TEST(!!ch_lambda);
 

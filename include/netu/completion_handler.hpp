@@ -27,6 +27,8 @@ class completion_handler<R(Ts...)>
   public:
     completion_handler() = default;
 
+    completion_handler(std::nullptr_t) noexcept;
+
     completion_handler(completion_handler const&) = delete;
     completion_handler(completion_handler&&) noexcept;
 
