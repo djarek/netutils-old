@@ -12,7 +12,9 @@
 
 #include <netu/detail/type_traits.hpp>
 
+#include <boost/align/aligned_allocator_adaptor.hpp>
 #include <boost/asio/associated_allocator.hpp>
+#include <boost/asio/associated_executor.hpp>
 #include <boost/core/pointer_traits.hpp>
 
 #include <boost/assert.hpp>
@@ -105,12 +107,9 @@ struct handler_manager<Handler, R(Ts...)>
     static void manage(raw_handler_ptr ptr, handler_base<R(Ts...)>& hb) noexcept
     {
         auto h = static_cast<Handler*>(ptr.void_ptr);
-        auto alloc = allocators::rebind_associated<Handler>(*h);
-        using pointer_t =
-          typename std::allocator_traits<decltype(alloc)>::pointer;
-        auto fancy_ptr = boost::pointer_traits<pointer_t>::pointer_to(*h);
+        auto alloc = boost::asio::get_associated_allocator(*h);
         std::allocator_traits<decltype(alloc)>::destroy(alloc, h);
-        std::allocator_traits<decltype(alloc)>::deallocate(alloc, fancy_ptr, 1);
+        std::allocator_traits<decltype(alloc)>::deallocate(alloc, h, 1);
         hb = {};
     }
 };
@@ -171,6 +170,47 @@ struct handler_manager<std::reference_wrapper<Handler>, R(Ts...)>
     }
 };
 
+template<typename Handler>
+struct wrapper_selector
+{
+    using inner_alloc_type =
+      detail::allocators::rebound_alloc_t<Handler, wrapper_selector>;
+    using inner_pointer_type =
+      typename std::allocator_traits<inner_alloc_type>::pointer;
+    using inner_value_type =
+      typename std::allocator_traits<inner_alloc_type>::value_type;
+    using allocator_type = typename std::conditional<
+      std::is_same<inner_pointer_type, inner_value_type*>::value,
+      inner_alloc_type,
+      boost::alignment::aligned_allocator_adaptor<inner_alloc_type>>::type;
+    using executor_type = boost::asio::associated_executor_t<Handler>;
+
+    Handler handler_;
+
+    template<typename DeducedHandler>
+    explicit wrapper_selector(DeducedHandler&& dh)
+      : handler_{std::forward<DeducedHandler>(dh)}
+    {
+    }
+
+    allocator_type get_allocator() const noexcept
+    {
+        return detail::allocators::rebind_associated<wrapper_selector>(
+          handler_);
+    }
+
+    executor_type get_executor() const noexcept
+    {
+        return boost::asio::get_associated_executor(handler_);
+    }
+
+    template<typename... Ts>
+    auto operator()(Ts&&... ts) -> decltype(handler_(std::forward<Ts>(ts)...))
+    {
+        return handler_(std::forward<Ts>(ts)...);
+    }
+};
+
 template<typename Signature, typename U, typename... Ts>
 std::pair<raw_handler_ptr, handler_base<Signature>>
 allocate_handler(U (*p)(Ts...)) noexcept
@@ -183,11 +223,12 @@ template<typename Signature, typename Handler>
 std::pair<raw_handler_ptr, handler_base<Signature>>
 allocate_handler(Handler&& handler)
 {
-    using handler_type = typename std::remove_reference<Handler>::type;
+    using handler_type =
+      wrapper_selector<typename std::remove_reference<Handler>::type>;
     auto alloc = detail::allocators::rebind_associated<handler_type>(handler);
     auto tmp = detail::allocators::allocate(alloc);
     std::allocator_traits<decltype(alloc)>::construct(
-      alloc, boost::to_address(tmp.get()), std::forward<Handler>(handler));
+      alloc, boost::to_address(tmp), std::forward<Handler>(handler));
     return {
       raw_handler_ptr{tmp.release()},
       handler_base<Signature>{handler_manager<handler_type, Signature>{}}};
