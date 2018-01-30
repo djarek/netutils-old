@@ -16,13 +16,11 @@ namespace netu
 {
 
 template<typename R, typename... Ts>
-template<
-  typename Handler,
-  class = detail::disable_conversion_t<Handler, completion_handler<R(Ts...)>>>
+template<typename Handler, class>
 completion_handler<R(Ts...)>::completion_handler(Handler&& handler)
 {
-    std::tie(hptr_, base_) =
-      detail::allocate_handler<R(Ts...)>(std::forward<Handler>(handler));
+    detail::allocate_handler<R(Ts...)>(
+      storage_, vtable_, std::forward<Handler>(handler));
 }
 
 template<typename R, typename... Ts>
@@ -34,29 +32,23 @@ completion_handler<R(Ts...)>::completion_handler(std::nullptr_t) noexcept
 template<typename R, typename... Ts>
 completion_handler<R(Ts...)>::completion_handler(
   completion_handler&& other) noexcept
-  : hptr_{other.hptr_}
-  , base_{detail::exchange(other.base_, {})}
+  : vtable_{detail::exchange(other.vtable_, default_vtable())}
 {
+    vtable_->move_construct(storage_, other.storage_);
 }
 
 template<typename R, typename... Ts>
 completion_handler<R(Ts...)>::~completion_handler()
 {
-    if (base_.manage_)
-    {
-        base_.manage_(hptr_, base_);
-    }
+    vtable_->destroy(storage_);
 }
 
 template<typename R, typename... Ts>
-template<
-  typename Handler,
-  class = detail::disable_conversion_t<Handler, completion_handler<R(Ts...)>>>
+template<typename Handler, class>
 completion_handler<R(Ts...)>&
 completion_handler<R(Ts...)>::operator=(Handler&& handler)
 {
-    completion_handler tmp{std::forward<Handler>(handler)};
-    this->swap(tmp);
+    *this = completion_handler{std::forward<Handler>(handler)};
     return *this;
 }
 
@@ -64,8 +56,7 @@ template<typename R, typename... Ts>
 completion_handler<R(Ts...)>&
 completion_handler<R(Ts...)>::operator=(completion_handler&& other) noexcept
 {
-    completion_handler tmp{std::move(other)};
-    this->swap(tmp);
+    completion_handler{std::move(other)}.swap(*this);
     return *this;
 }
 
@@ -73,8 +64,7 @@ template<typename R, typename... Ts>
 completion_handler<R(Ts...)>& completion_handler<R(Ts...)>::operator=(
   std::nullptr_t) noexcept
 {
-    completion_handler tmp;
-    this->swap(tmp);
+    *this = completion_handler{};
     return *this;
 }
 
@@ -82,9 +72,13 @@ template<typename R, typename... Ts>
 void
 completion_handler<R(Ts...)>::swap(completion_handler& other) noexcept
 {
+    detail::raw_handler_storage tmp;
+    vtable_->move_construct(tmp, storage_);
+    other.vtable_->move_construct(storage_, other.storage_);
+    vtable_->move_construct(other.storage_, tmp);
+
     using std::swap;
-    swap(hptr_, other.hptr_);
-    swap(base_, other.base_);
+    swap(vtable_, other.vtable_);
 }
 
 template<typename R, typename... Ts>
@@ -92,20 +86,24 @@ template<typename... Args>
 R
 completion_handler<R(Ts...)>::invoke(Args&&... args)
 {
-    if (!base_.manage_)
-    {
-        throw std::bad_function_call{};
-    }
+    // Need to clear the vtable ptr in order to avoid calling the destructor of
+    // the stored handler twice, if invocation of the handler throws.
+    auto v = exchange(vtable_, default_vtable());
+    return v->invoke(storage_, std::forward<Args>(args)...);
+}
 
-    return base_.invoke_(
-      detail::handler_op::invoke, hptr_, base_, std::forward<Args>(args)...);
+template<typename R, typename... Ts>
+detail::vtable<R(Ts...)> const*
+completion_handler<R(Ts...)>::default_vtable()
+{
+    return &detail::default_vtable_generator<R(Ts...)>::value;
 }
 
 template<typename R, typename... Ts>
 bool
 operator==(completion_handler<R(Ts...)> const& lhs, std::nullptr_t) noexcept
 {
-    return lhs.base_.manage_ == nullptr;
+    return !lhs;
 }
 
 template<typename R, typename... Ts>
@@ -132,7 +130,7 @@ operator!=(std::nullptr_t lhs, completion_handler<R(Ts...)> const& rhs) noexcept
 template<typename R, typename... Ts>
 completion_handler<R(Ts...)>::operator bool() const noexcept
 {
-    return static_cast<bool>(base_.manage_);
+    return vtable_ != default_vtable();
 }
 
 template<typename R, typename... Ts>

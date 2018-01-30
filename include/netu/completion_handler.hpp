@@ -10,10 +10,7 @@
 #ifndef NETU_COMPLETION_HANDLER_HPP
 #define NETU_COMPLETION_HANDLER_HPP
 
-#include <netu/detail/allocators.hpp>
 #include <netu/detail/handler_erasure.hpp>
-
-#include <functional>
 
 namespace netu
 {
@@ -72,8 +69,11 @@ class completion_handler<R(Ts...)>
                            completion_handler<U(Vs...)> const& rhs) noexcept;
 
   private:
-    detail::raw_handler_ptr hptr_;
-    detail::handler_base<R(Ts...)> base_;
+    static detail::vtable<R(Ts...)> const* default_vtable();
+
+    detail::raw_handler_storage storage_;
+    detail::vtable<R(Ts...)> const* vtable_ =
+      &detail::default_vtable_generator<R(Ts...)>::value;
 };
 
 } // namespace netu

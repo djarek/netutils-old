@@ -25,8 +25,7 @@ operator<<(std::ostream& stream, completion_handler<R(Ts...)> const& ch)
 
 namespace
 {
-void (*const func_ptr)(void) = []() {};
-
+void (*const func_ptr)() = []() {};
 } // namespace
 
 struct allocation_failure : std::bad_alloc
@@ -35,7 +34,7 @@ struct allocation_failure : std::bad_alloc
 
 struct construction_failure : std::runtime_error
 {
-    construction_failure(const char* str)
+    explicit construction_failure(const char* str)
       : std::runtime_error{str}
     {
     }
@@ -85,7 +84,7 @@ struct test_allocator
         ctrl_->constructions_left--;
     }
 
-    void deallocate(pointer p, std::size_t) { ::operator delete(p); }
+    void deallocate(pointer p, std::size_t /*n*/) { ::operator delete(p); }
 
     allocator_control* ctrl_;
 };
@@ -94,7 +93,7 @@ struct fat_functor
 {
     using allocator_type = test_allocator<fat_functor>;
 
-    std::array<char, 1000> data_;
+    std::array<char, 1000> data_{};
     allocator_type alloc_;
 
     explicit fat_functor(test_allocator<fat_functor> alloc)
@@ -177,14 +176,12 @@ BOOST_AUTO_TEST_CASE(assignment)
     ch = []() {};
     BOOST_TEST(!!ch);
 
-    completion_handler<void(void)> ch_move;
+    completion_handler<void(void)> ch_move = func_ptr;
     ch_move = std::move(ch);
     BOOST_TEST(!!ch_move);
+    BOOST_TEST(!ch);
     ch_move = nullptr;
     BOOST_TEST(!ch_move);
-
-    completion_handler<void(void)> ch_func_ptr{func_ptr};
-    BOOST_TEST(!!func_ptr);
 }
 
 BOOST_AUTO_TEST_CASE(invocation)
