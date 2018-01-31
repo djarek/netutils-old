@@ -88,7 +88,7 @@ completion_handler<R(Ts...)>::invoke(Args&&... args)
 {
     // Need to clear the vtable ptr in order to avoid calling the destructor of
     // the stored handler twice, if invocation of the handler throws.
-    auto v = exchange(vtable_, default_vtable());
+    auto v = detail::exchange(vtable_, default_vtable());
     return v->invoke(storage_, std::forward<Args>(args)...);
 }
 
