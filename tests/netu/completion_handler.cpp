@@ -125,7 +125,7 @@ BOOST_AUTO_TEST_CASE(constructors)
     BOOST_TEST(!!ch_move);
 
     completion_handler<void(void)> ch_func_ptr{func_ptr};
-    BOOST_TEST(!!func_ptr);
+    BOOST_TEST(!!ch_func_ptr);
 
     static_assert(
       !std::is_constructible<completion_handler<void(void)>,
