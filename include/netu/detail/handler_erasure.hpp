@@ -191,7 +191,7 @@ struct vtable_generator<Handler, R(Ts...)>
 
     static void destroy(raw_handler_storage& s) noexcept
     {
-        auto h = static_cast<Handler*>(s.void_ptr);
+        auto const h = static_cast<Handler*>(s.void_ptr);
         auto alloc = boost::asio::get_associated_allocator(*h);
         std::allocator_traits<decltype(alloc)>::destroy(alloc, h);
         std::allocator_traits<decltype(alloc)>::deallocate(alloc, h, 1);
@@ -208,7 +208,7 @@ struct vtable_generator<small_functor<Handler>, R(Ts...)>
 {
     static R invoke(raw_handler_storage& p, Ts... args)
     {
-        auto h = reinterpret_cast<small_functor<Handler>*>(&p.buffer);
+        auto const h = reinterpret_cast<small_functor<Handler>*>(&p.buffer);
         auto handler = std::move(*h);
         // Deallocation-before-invocation guarantee
         destroy(p);
@@ -223,14 +223,14 @@ struct vtable_generator<small_functor<Handler>, R(Ts...)>
         static_assert(alignof(small_functor<Handler>) <=
                         alignof(decltype(dst.buffer)),
                       "dst buffer not aligned properly");
-        auto h = reinterpret_cast<small_functor<Handler>*>(&src.buffer);
+        auto const h = reinterpret_cast<small_functor<Handler>*>(&src.buffer);
         new (&dst.buffer) small_functor<Handler>{std::move(*h)};
         destroy(src);
     }
 
     static void destroy(raw_handler_storage& s) noexcept
     {
-        auto h = reinterpret_cast<small_functor<Handler>*>(&s.buffer);
+        auto const h = reinterpret_cast<small_functor<Handler>*>(&s.buffer);
         h->~small_functor<Handler>();
     }
 
@@ -246,7 +246,7 @@ struct vtable_generator<U (*)(Vs...), R(Ts...)>
 {
     static R invoke(raw_handler_storage& s, Ts... args)
     {
-        auto h = reinterpret_cast<U (*)(Vs...)>(s.func_ptr);
+        auto const h = reinterpret_cast<U (*)(Vs...)>(s.func_ptr);
         BOOST_ASSERT(h != nullptr);
         return (h)(std::forward<Ts>(args)...);
     }
@@ -271,7 +271,7 @@ struct vtable_generator<std::reference_wrapper<Handler>, R(Ts...)>
 {
     static R invoke(raw_handler_storage& s, Ts... args)
     {
-        auto h = static_cast<Handler*>(s.void_ptr);
+        auto const h = static_cast<Handler*>(s.void_ptr);
         BOOST_ASSERT(h != nullptr);
         return (*h)(std::forward<Ts>(args)...);
     }
