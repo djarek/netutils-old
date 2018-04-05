@@ -21,7 +21,7 @@ class completion_handler;
 template<typename R, typename... Ts>
 class completion_handler<R(Ts...)>
 {
-  public:
+public:
     completion_handler() = default;
 
     completion_handler(std::nullptr_t) noexcept;
@@ -68,7 +68,7 @@ class completion_handler<R(Ts...)>
     friend bool operator!=(std::nullptr_t lhs,
                            completion_handler<U(Vs...)> const& rhs) noexcept;
 
-  private:
+private:
     static detail::vtable<R(Ts...)> const* default_vtable();
 
     detail::raw_handler_storage storage_;

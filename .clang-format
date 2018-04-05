@@ -8,5 +8,6 @@ Language: Cpp
 SortIncludes: 'true'
 Standard: Cpp11
 UseTab: Never
-
+AccessModifierOffset: -4
+AllowShortBlocksOnASingleLine: 'false'
 ...
