@@ -330,7 +330,7 @@ allocate_handler_sbo(raw_handler_storage& s,
 {
     using handler_type =
       small_functor<typename std::remove_reference<Handler>::type>;
-    new (&s.buffer) handler_type{std::forward<Handler>(handler)};
+    ::new (static_cast<void*>(&s.buffer)) handler_type{std::forward<Handler>(handler)};
     v = &vtable_generator<handler_type, Signature>::value;
 }
 
