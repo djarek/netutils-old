@@ -11,6 +11,7 @@
 #define NETU_COMPLETION_HANDLER_HPP
 
 #include <netu/detail/handler_erasure.hpp>
+#include <netu/detail/type_traits.hpp>
 
 namespace netu
 {

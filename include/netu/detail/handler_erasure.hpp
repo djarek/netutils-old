@@ -11,15 +11,12 @@
 #define NETU_DETAIL_HANDLER_ERASURE_HPP
 
 #include <netu/detail/allocators.hpp>
-#include <netu/detail/type_traits.hpp>
 
 #include <boost/align/aligned_allocator_adaptor.hpp>
 #include <boost/asio/associated_allocator.hpp>
 #include <boost/asio/associated_executor.hpp>
-#include <boost/core/pointer_traits.hpp>
 
 #include <boost/assert.hpp>
-#include <functional>
 
 namespace netu
 {
@@ -69,20 +66,27 @@ struct vtable<R(Ts...)>
     destructor_t destroy;
 };
 
-template<typename R, typename... Ts>
-struct default_vtable_generator<R(Ts...)>
+struct default_vtable_generator_base
 {
-    static R invoke(raw_handler_storage&, Ts...)
-    {
-        throw std::bad_function_call{};
-    }
-
+    // Use a base class to prevent generation of empty functions for each
+    // completion handler signature
     static void move_construct(raw_handler_storage&,
                                raw_handler_storage&) noexcept
     {
     }
 
-    static void destroy(raw_handler_storage&) noexcept {}
+    static void destroy(raw_handler_storage&) noexcept
+    {
+    }
+};
+
+template<typename R, typename... Ts>
+struct default_vtable_generator<R(Ts...)> : default_vtable_generator_base
+{
+    static R invoke(raw_handler_storage&, Ts...)
+    {
+        throw std::bad_function_call{};
+    }
 
     static constexpr vtable<R(Ts...)> value{invoke, move_construct, destroy};
 };
@@ -170,12 +174,23 @@ using can_use_sbo =
                            sizeof(T) <= sizeof(raw_handler_storage) &&
                            alignof(T) <= alignof(raw_handler_storage)>;
 
+struct vtable_generator_void_ptr_base : private default_vtable_generator_base
+{
+    static void move_construct(raw_handler_storage& dst,
+                               raw_handler_storage& src) noexcept
+    {
+        dst.void_ptr = src.void_ptr;
+    }
+
+    using default_vtable_generator_base::destroy;
+};
+
 template<typename Handler, typename R, typename... Ts>
-struct vtable_generator<Handler, R(Ts...)>
+struct vtable_generator<Handler, R(Ts...)> : vtable_generator_void_ptr_base
 {
     static R invoke(raw_handler_storage& s, Ts... args)
     {
-        auto h = static_cast<Handler*>(s.void_ptr);
+        auto* const h = static_cast<Handler*>(s.void_ptr);
         BOOST_ASSERT(h != nullptr);
         auto handler = std::move(*h);
         // Deallocation-before-invocation guarantee
@@ -183,15 +198,9 @@ struct vtable_generator<Handler, R(Ts...)>
         return (handler)(std::forward<Ts>(args)...);
     }
 
-    static void move_construct(raw_handler_storage& dst,
-                               raw_handler_storage& src) noexcept
-    {
-        dst.void_ptr = src.void_ptr;
-    }
-
     static void destroy(raw_handler_storage& s) noexcept
     {
-        auto const h = static_cast<Handler*>(s.void_ptr);
+        auto* const h = static_cast<Handler*>(s.void_ptr);
         auto alloc = boost::asio::get_associated_allocator(*h);
         std::allocator_traits<decltype(alloc)>::destroy(alloc, h);
         std::allocator_traits<decltype(alloc)>::deallocate(alloc, h, 1);
@@ -208,7 +217,7 @@ struct vtable_generator<small_functor<Handler>, R(Ts...)>
 {
     static R invoke(raw_handler_storage& p, Ts... args)
     {
-        auto const h = reinterpret_cast<small_functor<Handler>*>(&p.buffer);
+        auto* const h = reinterpret_cast<small_functor<Handler>*>(&p.buffer);
         auto handler = std::move(*h);
         // Deallocation-before-invocation guarantee
         destroy(p);
@@ -223,7 +232,7 @@ struct vtable_generator<small_functor<Handler>, R(Ts...)>
         static_assert(alignof(small_functor<Handler>) <=
                         alignof(decltype(dst.buffer)),
                       "dst buffer not aligned properly");
-        auto const h = reinterpret_cast<small_functor<Handler>*>(&src.buffer);
+        auto* const h = reinterpret_cast<small_functor<Handler>*>(&src.buffer);
         new (&dst.buffer) small_functor<Handler>{std::move(*h)};
         destroy(src);
     }
@@ -241,26 +250,28 @@ template<typename Handler, typename R, typename... Ts>
 constexpr vtable<R(Ts...)>
   vtable_generator<small_functor<Handler>, R(Ts...)>::value;
 
-template<typename U, typename... Vs, typename R, typename... Ts>
-struct vtable_generator<U (*)(Vs...), R(Ts...)>
+struct vtable_generator_func_ptr_base : private default_vtable_generator_base
 {
-    static R invoke(raw_handler_storage& s, Ts... args)
-    {
-        auto const h = reinterpret_cast<U (*)(Vs...)>(s.func_ptr);
-        BOOST_ASSERT(h != nullptr);
-        return (h)(std::forward<Ts>(args)...);
-    }
-
     static void move_construct(raw_handler_storage& dst,
                                raw_handler_storage& src) noexcept
     {
         dst.func_ptr = src.func_ptr;
     }
 
-    static constexpr vtable<R(Ts...)> value{
-      invoke,
-      move_construct,
-      default_vtable_generator<R(Ts...)>::destroy};
+    using default_vtable_generator_base::destroy;
+};
+
+template<typename U, typename... Vs, typename R, typename... Ts>
+struct vtable_generator<U (*)(Vs...), R(Ts...)> : vtable_generator_func_ptr_base
+{
+    static R invoke(raw_handler_storage& s, Ts... args)
+    {
+        auto* const h = reinterpret_cast<U (*)(Vs...)>(s.func_ptr);
+        BOOST_ASSERT(h != nullptr);
+        return (h)(std::forward<Ts>(args)...);
+    }
+
+    static constexpr vtable<R(Ts...)> value{invoke, move_construct, destroy};
 };
 
 template<typename U, typename... Vs, typename R, typename... Ts>
@@ -268,24 +279,16 @@ constexpr vtable<R(Ts...)> vtable_generator<U (*)(Vs...), R(Ts...)>::value;
 
 template<typename Handler, typename R, typename... Ts>
 struct vtable_generator<std::reference_wrapper<Handler>, R(Ts...)>
+  : vtable_generator_void_ptr_base
 {
     static R invoke(raw_handler_storage& s, Ts... args)
     {
-        auto const h = static_cast<Handler*>(s.void_ptr);
+        auto* const h = static_cast<Handler*>(s.void_ptr);
         BOOST_ASSERT(h != nullptr);
         return (*h)(std::forward<Ts>(args)...);
     }
 
-    static void move_construct(raw_handler_storage& dst,
-                               raw_handler_storage& src) noexcept
-    {
-        dst.void_ptr = src.void_ptr;
-    }
-
-    static constexpr vtable<R(Ts...)> value{
-      invoke,
-      move_construct,
-      default_vtable_generator<R(Ts...)>::destroy};
+    static constexpr vtable<R(Ts...)> value{invoke, move_construct, destroy};
 };
 
 template<typename Handler, typename R, typename... Ts>
@@ -312,10 +315,9 @@ allocate_handler_sbo(raw_handler_storage& s,
     using handler_type =
       wrapper_selector<typename std::remove_reference<Handler>::type>;
     auto alloc = detail::allocators::rebind_associated<handler_type>(h);
-    auto tmp = detail::allocators::allocate(alloc);
-    std::allocator_traits<decltype(alloc)>::construct(
-      alloc, boost::to_address(tmp), std::forward<Handler>(h));
-    s.void_ptr = tmp.release();
+    auto handler_ptr =
+      detail::allocators::allocate_unique(alloc, std::forward<Handler>(h));
+    s.void_ptr = handler_ptr.release();
     v = &vtable_generator<handler_type, Signature>::value;
 }
 
