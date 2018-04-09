@@ -11,6 +11,7 @@
 
 #include <boost/make_unique.hpp>
 #include <boost/test/unit_test.hpp>
+#include <netu/test/allocator.hpp>
 
 namespace netu
 {
@@ -28,82 +29,26 @@ namespace
 void (*const func_ptr)() = []() {};
 } // namespace
 
-struct allocation_failure : std::bad_alloc
-{
-};
-
-struct construction_failure : std::runtime_error
-{
-    explicit construction_failure(const char* str)
-      : std::runtime_error{str}
-    {
-    }
-};
-
-struct allocator_control
-{
-    std::size_t allocatons_left = 0;
-    std::size_t constructions_left = 0;
-};
-
-template<typename T>
-struct test_allocator
-{
-    using value_type = T;
-    using pointer = value_type*;
-
-    template<typename U>
-    explicit test_allocator(test_allocator<U> const& other)
-      : ctrl_{other.ctrl_}
-    {
-    }
-
-    explicit test_allocator(allocator_control& ctrl)
-      : ctrl_{&ctrl}
-    {
-    }
-
-    pointer allocate(std::size_t n)
-    {
-        if (ctrl_->allocatons_left == 0)
-        {
-            throw allocation_failure{};
-        }
-        ctrl_->allocatons_left--;
-        return static_cast<pointer>(::operator new(n * sizeof(T)));
-    }
-
-    template<typename... Args>
-    void construct(pointer p, Args&&... args)
-    {
-        if (ctrl_->constructions_left == 0)
-        {
-            throw construction_failure{"ctrl_->constructions_left == 0"};
-        }
-        new (p) T{std::forward<Args>(args)...};
-        ctrl_->constructions_left--;
-    }
-
-    void deallocate(pointer p, std::size_t /*n*/) { ::operator delete(p); }
-
-    allocator_control* ctrl_;
-};
-
 struct fat_functor
 {
-    using allocator_type = test_allocator<fat_functor>;
+    using allocator_type = test::allocator<fat_functor>;
 
     std::array<char, 1000> data_{};
     allocator_type alloc_;
 
-    explicit fat_functor(test_allocator<fat_functor> alloc)
+    explicit fat_functor(test::allocator<fat_functor> alloc)
       : alloc_{alloc}
     {
     }
 
-    allocator_type get_allocator() const { return alloc_; }
+    allocator_type get_allocator() const
+    {
+        return alloc_;
+    }
 
-    void operator()() {}
+    void operator()()
+    {
+    }
 };
 
 static_assert(std::is_same<boost::asio::associated_allocator_t<fat_functor>,
@@ -139,18 +84,18 @@ BOOST_AUTO_TEST_CASE(constructors)
 
 BOOST_AUTO_TEST_CASE(allocation)
 {
-    allocator_control ctrl{};
-    fat_functor ff{test_allocator<fat_functor>{ctrl}};
+    test::allocator_control ctrl{};
+    fat_functor ff{test::allocator<fat_functor>{ctrl}};
     completion_handler<void(void)> ch;
 
-    BOOST_CHECK_THROW(ch = ff, allocation_failure);
+    BOOST_CHECK_THROW(ch = ff, test::allocation_failure);
     BOOST_TEST(!ch);
     BOOST_TEST(ch == nullptr);
     BOOST_TEST(ctrl.allocatons_left == 0);
     BOOST_TEST(ctrl.constructions_left == 0);
 
     ctrl.allocatons_left = 1;
-    BOOST_CHECK_THROW(ch = ff, construction_failure);
+    BOOST_CHECK_THROW(ch = ff, test::construction_failure);
     BOOST_TEST(!ch);
     BOOST_TEST(ch == nullptr);
     BOOST_TEST(ctrl.allocatons_left == 0);
