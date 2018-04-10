@@ -33,6 +33,8 @@ struct allocator_control
 {
     std::size_t allocatons_left = 0;
     std::size_t constructions_left = 0;
+    std::size_t destructions = 0;
+    std::size_t deallocations = 0;
 };
 
 template<typename T>
@@ -73,9 +75,16 @@ struct allocator
         ctrl_->constructions_left--;
     }
 
-    void deallocate(pointer p, std::size_t /*n*/)
+    void destroy(pointer p) noexcept
+    {
+        p->~T();
+        ctrl_->destructions++;
+    }
+
+    void deallocate(pointer p, std::size_t /*n*/) noexcept
     {
         ::operator delete(p);
+        ctrl_->deallocations++;
     }
 
     allocator_control* ctrl_;
