@@ -73,8 +73,7 @@ private:
     static detail::vtable<R(Ts...)> const* default_vtable();
 
     detail::raw_handler_storage storage_;
-    detail::vtable<R(Ts...)> const* vtable_ =
-      &detail::default_vtable_generator<R(Ts...)>::value;
+    detail::vtable<R(Ts...)> const* vtable_ = default_vtable();
 };
 
 } // namespace netu
