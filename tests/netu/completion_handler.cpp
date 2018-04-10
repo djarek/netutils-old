@@ -41,7 +41,7 @@ struct fat_functor
     {
     }
 
-    allocator_type get_allocator() const
+    allocator_type get_allocator() const noexcept
     {
         return alloc_;
     }
@@ -86,32 +86,46 @@ BOOST_AUTO_TEST_CASE(allocation)
 {
     test::allocator_control ctrl{};
     fat_functor ff{test::allocator<fat_functor>{ctrl}};
-    completion_handler<void(void)> ch;
+    {
+        completion_handler<void(void)> ch;
 
-    BOOST_CHECK_THROW(ch = ff, test::allocation_failure);
-    BOOST_TEST(!ch);
-    BOOST_TEST(ch == nullptr);
+        BOOST_CHECK_THROW(ch = ff, test::allocation_failure);
+        BOOST_TEST(!ch);
+        BOOST_TEST(ch == nullptr);
+        BOOST_TEST(ctrl.allocatons_left == 0);
+        BOOST_TEST(ctrl.constructions_left == 0);
+        BOOST_TEST(ctrl.destructions == 0);
+        BOOST_TEST(ctrl.deallocations == 0);
+
+        ctrl.allocatons_left = 1;
+        BOOST_CHECK_THROW(ch = ff, test::construction_failure);
+        BOOST_TEST(!ch);
+        BOOST_TEST(ch == nullptr);
+        BOOST_TEST(ctrl.allocatons_left == 0);
+        BOOST_TEST(ctrl.constructions_left == 0);
+        BOOST_TEST(ctrl.destructions == 0);
+        BOOST_TEST(ctrl.deallocations == 1);
+        ctrl = {};
+
+        ctrl.allocatons_left = 1;
+        ctrl.constructions_left = 1;
+        ch = ff;
+        BOOST_TEST(!!ch);
+        BOOST_TEST(ch != nullptr);
+        BOOST_TEST(ctrl.allocatons_left == 0);
+        BOOST_TEST(ctrl.constructions_left == 0);
+        BOOST_TEST(ctrl.destructions == 0);
+        BOOST_TEST(ctrl.deallocations == 0);
+
+        ch = nullptr;
+        BOOST_TEST(!ch);
+        BOOST_TEST(nullptr == ch);
+    }
+
     BOOST_TEST(ctrl.allocatons_left == 0);
     BOOST_TEST(ctrl.constructions_left == 0);
-
-    ctrl.allocatons_left = 1;
-    BOOST_CHECK_THROW(ch = ff, test::construction_failure);
-    BOOST_TEST(!ch);
-    BOOST_TEST(ch == nullptr);
-    BOOST_TEST(ctrl.allocatons_left == 0);
-    BOOST_TEST(ctrl.constructions_left == 0);
-
-    ctrl.allocatons_left = 1;
-    ctrl.constructions_left = 1;
-    ch = ff;
-    BOOST_TEST(!!ch);
-    BOOST_TEST(ch != nullptr);
-    BOOST_TEST(ctrl.allocatons_left == 0);
-    BOOST_TEST(ctrl.constructions_left == 0);
-
-    ch = nullptr;
-    BOOST_TEST(!ch);
-    BOOST_TEST(nullptr == ch);
+    BOOST_TEST(ctrl.destructions == 1);
+    BOOST_TEST(ctrl.deallocations == 1);
 }
 
 BOOST_AUTO_TEST_CASE(assignment)
