@@ -1,5 +1,6 @@
 set (netu_tests_srcs
     netu/completion_handler.cpp
+    netu/timed_read_stream.cpp
 )
 
 function (netutils_add_test test_file)
