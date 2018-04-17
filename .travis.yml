@@ -1,0 +1,25 @@
+#
+# Copyright (c) 2018 Damian Jarek (damian dot jarek93 at gmail dot com)
+#
+# Distributed under the Boost Software License, Version 1.0. (See accompanying
+# file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+#
+# Official repository: https://github.com/djarek/netutils
+#
+
+sudo: true
+
+language: cpp
+
+services:
+  - docker
+
+before_install:
+  - docker pull djarek/boost-docker:gcc-7-boost-1.67.0
+  - docker run -it -d --env LD_LIBRARY_PATH=/usr/local/lib --volume $(pwd):/root/netutils:ro --workdir=/root --name build djarek/boost-docker:gcc-7-boost-1.67.0 bash
+install:
+  - docker exec build apt update
+  - docker exec build apt install cmake lcov -y
+
+script:
+  - docker exec build ctest --output-on-failure -V -S netutils/CMakeModules/ci_build.cmake
