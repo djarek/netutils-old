@@ -16,7 +16,6 @@ target_link_libraries(netutils INTERFACE ${Boost_LIBRARIES} -pthread netutils)
 
 enable_testing()
 include(CTest)
-include(CodeCoverage)
 add_subdirectory(tests)
 
 install (
