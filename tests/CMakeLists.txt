@@ -12,7 +12,6 @@ function (netutils_add_test test_file)
     target_include_directories(${target_name} PRIVATE extras/include)
 
     add_test("${PROJECT_NAME}_${target_name}_tests" ${target_name})
-    setup_target_for_coverage("${PROJECT_NAME}_${target_name}_coverage" tests coverage)
     #target_compile_features(completion_handler_test PRIVATE cxx_std_11)
 endfunction(netutils_add_test)
 
