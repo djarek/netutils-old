@@ -29,7 +29,7 @@ before_install:
   - docker run -it -d --env LD_LIBRARY_PATH=/usr/local/lib --volume $(pwd):/root/netutils:ro --workdir=/root --name $CONTAINER_NAME djarek/boost-docker:gcc-7-boost-1.67.0 bash
 
 script:
-  - docker exec $CONTAINER_NAME ctest --output-on-failure -V -S netutils/CMakeModules/ci_build.cmake
+  - docker exec $CONTAINER_NAME ctest --output-on-failure -VV -S netutils/CMakeModules/ci_build.cmake
 
 after_success:
   - docker cp $CONTAINER_NAME:/root/build .
