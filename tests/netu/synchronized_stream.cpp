@@ -9,20 +9,22 @@
 
 #include <netu/synchronized_stream.hpp>
 
-#include <boost/beast/test/stream.hpp>
+#include <boost/asio/local/connect_pair.hpp>
+#include <boost/asio/local/stream_protocol.hpp>
 #include <boost/mpl/list.hpp>
 #include <boost/test/unit_test.hpp>
 
 namespace netu
 {
 
-using test_stream_t = boost::beast::test::stream;
+using test_stream_t = boost::asio::local::stream_protocol::socket;
 
 struct synchronized_stream_ctx_fixture
 {
     synchronized_stream_ctx_fixture()
     {
-        stream1_.lowest_layer().connect(stream2_.lowest_layer());
+        boost::asio::local::connect_pair(stream1_.lowest_layer(),
+                                         stream2_.lowest_layer());
     }
 
     boost::asio::io_context ctx_;
@@ -34,7 +36,8 @@ struct synchronized_stream_piecewise_fixture
 {
     synchronized_stream_piecewise_fixture()
     {
-        stream1_.lowest_layer().connect(stream2_.lowest_layer());
+        boost::asio::local::connect_pair(stream1_.lowest_layer(),
+                                         stream2_.lowest_layer());
     }
 
     boost::asio::io_context ctx_;
@@ -52,7 +55,8 @@ struct synchronized_stream_two_arg_fixture
 {
     synchronized_stream_two_arg_fixture()
     {
-        stream1_.lowest_layer().connect(stream2_.lowest_layer());
+        boost::asio::local::connect_pair(stream1_.lowest_layer(),
+                                         stream2_.lowest_layer());
     }
 
     boost::asio::io_context ctx_;

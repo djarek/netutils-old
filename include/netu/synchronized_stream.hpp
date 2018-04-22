@@ -29,7 +29,6 @@ public:
     using lowest_layer_type = typename NextLayer::lowest_layer_type;
     using executor_type = detail::executor_from_context_t<Executor>;
 
-
     explicit synchronized_stream(boost::asio::io_context& ctx);
 
     template<typename... StreamArgs, typename... ExecutorArgs>
@@ -75,7 +74,7 @@ public:
 
 private:
     template<typename CompletionHandler>
-    struct io_op;
+    class io_op;
 
     std::pair<next_layer_type, executor_type> p_;
 };
