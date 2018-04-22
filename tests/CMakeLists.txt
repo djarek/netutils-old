@@ -1,5 +1,6 @@
 set (netu_tests_srcs
-    netu/completion_handler.cpp)
+    netu/completion_handler.cpp
+    netu/synchronized_value.cpp)
 
 function (netutils_add_test test_file)
     get_filename_component(target_name ${test_file} NAME_WE)
