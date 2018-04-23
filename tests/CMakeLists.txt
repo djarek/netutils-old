@@ -1,4 +1,5 @@
 set (netu_tests_srcs
+    netu/basic_timeout.cpp
     netu/completion_handler.cpp
     netu/synchronized_value.cpp
     netu/synchronized_stream.cpp)

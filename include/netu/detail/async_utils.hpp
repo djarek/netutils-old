@@ -31,6 +31,44 @@ using io_completion_result_t =
   BOOST_ASIO_INITFN_RESULT_TYPE(CompletionToken,
                                 void(boost::system::error_code, std::size_t));
 
+template<typename CompletionToken>
+using io_completion_handler_t =
+  typename io_completion_result_t<CompletionToken>::completion_handler_type;
+
+template<typename CompletionToken>
+using wait_completion_t =
+  boost::asio::async_completion<CompletionToken,
+                                void(boost::system::error_code)>;
+
+template<typename CompletionToken>
+using wait_completion_result_t =
+  BOOST_ASIO_INITFN_RESULT_TYPE(CompletionToken,
+                                void(boost::system::error_code));
+
+template<typename CompletionToken>
+using wait_completion_handler_t =
+  typename wait_completion_t<CompletionToken>::completion_handler_type;
+
+template<template<typename...> class AsyncOp,
+         typename... Us,
+         typename CompletionToken,
+         typename... Ts,
+         typename... Args>
+auto
+make_composed_op(
+  boost::asio::async_completion<CompletionToken, void(Ts...)>& init,
+  Args&&... args)
+  -> AsyncOp<typename boost::asio::async_completion<
+               CompletionToken,
+               void(Ts...)>::completion_handler_type,
+             Us...>
+{
+    using ch_t = typename boost::asio::
+      async_completion<CompletionToken, void(Ts...)>::completion_handler_type;
+    return AsyncOp<ch_t, Us...>{std::move(init.completion_handler),
+                                std::forward<Args>(args)...};
+}
+
 template<typename T, typename = void>
 struct has_executor : std::false_type
 {
@@ -51,8 +89,7 @@ get_executor_from_context(T& t, std::true_type) -> T
 
 template<typename T>
 auto
-get_executor_from_context(T& t, std::false_type) ->
-  typename T::executor_type
+get_executor_from_context(T& t, std::false_type) -> typename T::executor_type
 {
     return t.get_executor();
 }
