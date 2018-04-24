@@ -7,8 +7,8 @@
 // Official repository: https://github.com/djarek/netutils
 //
 
-#ifndef NETU_DETAIL_TYPE_TRAITS_HPP
-#define NETU_DETAIL_TYPE_TRAITS_HPP
+#ifndef NETU_DETAIL_ASYNC_UTILS_HPP
+#define NETU_DETAIL_ASYNC_UTILS_HPP
 
 #include <boost/asio/async_result.hpp>
 #include <boost/asio/is_executor.hpp>
@@ -72,4 +72,4 @@ using executor_from_context_t =
 } // namespace detail
 } // namespace netu
 
-#endif // NETU_DETAIL_TYPE_TRAITS_HPP
+#endif // NETU_DETAIL_ASYNC_UTILS_HPP
