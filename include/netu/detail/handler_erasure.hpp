@@ -33,6 +33,12 @@ struct default_vtable_generator;
 template<typename Signature>
 struct vtable;
 
+template<typename Signature>
+struct node_vtable;
+
+template<typename Handler, typename Base, typename Signature>
+struct node_vtable_generator;
+
 union raw_handler_storage {
     using func_ptr_t = void (*)();
     // users of ASIO love to shove shared_ptr's into their CompletionHandlers,
@@ -51,6 +57,53 @@ union raw_handler_storage {
     func_ptr_t func_ptr; // never call this without casting to original type
     sbo_storage_type buffer;
 };
+
+// vtable used when storage needs to be allocated anyways (e.g. the handler is
+// linked into a container)
+template<typename R, typename... Ts>
+struct node_vtable<R(Ts...)>
+{
+    using destructor_t = void (*)(void*) /*noexcept*/;
+    using invoke_t = R (*)(void*, Ts...);
+
+    invoke_t invoke;
+    destructor_t destroy;
+};
+
+template<typename Handler, typename Base, typename R, typename... Ts>
+struct node_vtable_generator<Handler, Base, R(Ts...)>
+{
+    static R invoke(void* p, Ts... args)
+    {
+        auto* const h = get_derived_address(p);
+        BOOST_ASSERT(h != nullptr);
+        std::unique_ptr<void, decltype(&destroy)> p_guard{p, &destroy};
+        auto handler = std::move(*h);
+        // Deallocation-before-invocation guarantee
+        p_guard.reset();
+        return (handler)(std::forward<Ts>(args)...);
+    }
+
+    static void destroy(void* p) noexcept
+    {
+        auto* const h = get_derived_address(p);
+        auto alloc = h->get_allocator();
+        std::allocator_traits<decltype(alloc)>::destroy(alloc, h);
+        std::allocator_traits<decltype(alloc)>::deallocate(alloc, h, 1);
+    }
+
+    static Handler* get_derived_address(void* p) noexcept
+    {
+        auto* const bh = static_cast<Base*>(p);
+        return static_cast<Handler*>(bh);
+    }
+
+    static constexpr node_vtable<R(Ts...)> value{invoke, destroy};
+};
+
+template<typename Handler, typename Base, typename R, typename... Ts>
+constexpr node_vtable<R(Ts...)>
+  node_vtable_generator<Handler, Base, R(Ts...)>::value;
 
 template<typename R, typename... Ts>
 struct vtable<R(Ts...)>
@@ -305,6 +358,10 @@ allocate_handler(raw_handler_storage& s,
     v = &vtable_generator<U (*)(Ts...), Signature>::value;
 }
 
+template<typename Handler>
+using wrapper_selector_t =
+  wrapper_selector<typename std::remove_reference<Handler>::type>;
+
 template<typename Signature, typename Handler>
 void
 allocate_handler_sbo(raw_handler_storage& s,
@@ -312,8 +369,7 @@ allocate_handler_sbo(raw_handler_storage& s,
                      Handler&& h,
                      std::false_type)
 {
-    using handler_type =
-      wrapper_selector<typename std::remove_reference<Handler>::type>;
+    using handler_type = wrapper_selector_t<Handler>;
     auto alloc = detail::allocators::rebind_associated<handler_type>(h);
     auto handler_ptr =
       detail::allocators::allocate_unique(alloc, std::forward<Handler>(h));
@@ -330,7 +386,8 @@ allocate_handler_sbo(raw_handler_storage& s,
 {
     using handler_type =
       small_functor<typename std::remove_reference<Handler>::type>;
-    ::new (static_cast<void*>(&s.buffer)) handler_type{std::forward<Handler>(handler)};
+    ::new (static_cast<void*>(&s.buffer))
+      handler_type{std::forward<Handler>(handler)};
     v = &vtable_generator<handler_type, Signature>::value;
 }
 
@@ -353,6 +410,33 @@ allocate_handler(raw_handler_storage& s,
 {
     s.void_ptr = &handler.get();
     v = &vtable_generator<std::reference_wrapper<Handler>, Signature>::value;
+}
+
+struct node_deleter
+{
+    template<typename Node>
+    void operator()(Node* p) noexcept
+    {
+        p->destroy();
+    }
+};
+
+template<typename Signature,
+         typename NodeDerived,
+         typename NodeBase,
+         typename Handler,
+         typename... Ts>
+auto
+allocate_handler_node(Handler&& h, Ts&&... ts)
+  -> std::unique_ptr<NodeBase, node_deleter>
+{
+    auto alloc = detail::allocators::rebind_associated<NodeDerived>(h);
+    auto handler_ptr = detail::allocators::allocate_unique(
+      alloc,
+      &node_vtable_generator<NodeDerived, NodeBase, Signature>::value,
+      std::forward<Handler>(h),
+      std::forward<Ts>(ts)...);
+    return std::unique_ptr<NodeBase, node_deleter>{handler_ptr.release()};
 }
 
 } // namespace detail
