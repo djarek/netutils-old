@@ -16,25 +16,12 @@ env:
     - CONTAINER_NAME=build_container
     - secure: "hpdl88zuBwHZl88cxC/FQIRz8TfmJhTf5dVDlF48mp3v0LvxZb5IZFFE/4t4XqDK+Kd/I5EHhWpHiAl2apFkP7IbmIN99ZCrceqbiO2nxtKnF+ypAmsN9AUsQ0GJtLNBsIcQZJllHixunS3W/K+aCDsLCdfZqhofMxuoxhmVil0tt8vLteaiYxJ+ssdwD8VpOhIAJ36lkNe493G23vd+ZDwhrAOrYUusoIWZhx+BfhN9SlmNxJ/vLkO6Jo4sBTz1og4t5FQnxWUX/E3aB9qgx2kmLoBPGPypi58hFsGuDM8aO1DO+/ZG37NpzTzYz5v5g6FL8W/bfcDhavvJwljr0FJv6GBUIZgDE5dAQW/4TsammvCOnhXXDccg7hu0FT9lcnox1MG2p/YWT1FJfChs5kSszS+tO0sMX2W0PP1/OUoXseXU9Ijhv/mMkKPr0kmdU3+X55xWj/aivLICq+05I4zya7E/vr6W0vhOUZYmFyH0rhDqYKpr8IGshFeIPOSjFRFwD0edOZtDGvL7P3EPwX7sXSJk0iNVa7uSGEZ/8Avq+2Me90iKkRquAppZ3mObFB7i+M1RmIMIiR0alVrGKZ2USQgz60hlXg6SXohBfyV2Tkx9WMHILGbr4rgXv/UKTyCs1cTRbOD8yQvQho0eZGI0DCsTcDknYKe9QOg5dWk="
 
-addons:
-  apt:
-    packages:
-    - lcov
-
 services:
   - docker
 
 before_install:
   - docker pull djarek/boost-docker:gcc-7-boost-1.67.0
-  - docker run -it -d --env LD_LIBRARY_PATH=/usr/local/lib --volume $(pwd):/root/netutils:ro --workdir=/root --name $CONTAINER_NAME djarek/boost-docker:gcc-7-boost-1.67.0 bash
+  - docker run -it -d --env LD_LIBRARY_PATH=/usr/local/lib --volume $(pwd):$(pwd):ro --workdir=$(pwd)/.. --name $CONTAINER_NAME djarek/boost-docker:gcc-7-boost-1.67.0 bash
 
 script:
   - docker exec $CONTAINER_NAME ctest --output-on-failure -VV -S netutils/CMakeModules/ci_build.cmake
-
-after_success:
-  - docker cp $CONTAINER_NAME:/root/build .
-  - lcov --directory build --capture --output-file build/coverage.info
-  - echo $(pwd)'/tests/*'
-  - lcov --remove build/coverage.info '/usr/*' '/root/netutils/tests/*' --output-file build/coverage.info
-  - lcov --list build/coverage.info
-  - bash <(curl -s https://codecov.io/bash) || echo "Codecov did not collect coverage reports"
