@@ -49,26 +49,6 @@ template<typename CompletionToken>
 using wait_completion_handler_t =
   typename wait_completion_t<CompletionToken>::completion_handler_type;
 
-template<template<typename...> class AsyncOp,
-         typename... Us,
-         typename CompletionToken,
-         typename... Ts,
-         typename... Args>
-auto
-make_composed_op(
-  boost::asio::async_completion<CompletionToken, void(Ts...)>& init,
-  Args&&... args)
-  -> AsyncOp<typename boost::asio::async_completion<
-               CompletionToken,
-               void(Ts...)>::completion_handler_type,
-             Us...>
-{
-    using ch_t = typename boost::asio::
-      async_completion<CompletionToken, void(Ts...)>::completion_handler_type;
-    return AsyncOp<ch_t, Us...>{std::move(init.completion_handler),
-                                std::forward<Args>(args)...};
-}
-
 template<typename T, typename = void>
 struct has_executor : std::false_type
 {
