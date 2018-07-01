@@ -131,37 +131,57 @@ private:
 struct basic_timeout_fixture
 {
     boost::asio::io_context ctx_;
-    basic_timeout<fake_timer> timeout_{ctx_};
+    basic_timeout<fake_timer> timeout1_{ctx_};
+    basic_timeout<fake_timer> timeout2_{ctx_};
 };
 
-const auto timeout = std::chrono::seconds{2};
+const auto timeout1 = std::chrono::seconds{3};
+const auto timeout2 = std::chrono::seconds{4};
 
 BOOST_AUTO_TEST_CASE(timeout_wait_timed_out)
 {
     basic_timeout_fixture f;
-    f.timeout_.expires_from_now(timeout);
+    f.timeout1_.expires_from_now(timeout1);
+    f.timeout2_.expires_from_now(timeout2);
 
-    int invoked = 0;
-    f.timeout_.async_wait([&](boost::system::error_code ec) {
-        ++invoked;
+    int invoked1 = 0;
+    int invoked2 = 0;
+    f.timeout1_.async_wait([&](boost::system::error_code ec) {
+        ++invoked1;
         BOOST_TEST(!ec);
         BOOST_ASSERT(f.ctx_.get_executor().running_in_this_thread());
     });
+
+    f.timeout2_.async_wait([&](boost::system::error_code ec) {
+        ++invoked2;
+        BOOST_TEST(!ec);
+        BOOST_ASSERT(f.ctx_.get_executor().running_in_this_thread());
+    });
+
     auto n = f.ctx_.poll();
     BOOST_TEST(n == 0u);
-    f.timeout_.get_timer().force_expiration();
+    f.timeout1_.get_timer().force_expiration();
     n = f.ctx_.poll();
     BOOST_TEST(n == 2u);
-    BOOST_TEST(invoked == 1);
+    BOOST_TEST(invoked1 == 1);
+    BOOST_TEST(invoked2 == 0);
+
+    n = f.ctx_.poll();
+    BOOST_TEST(n == 0u);
+    f.timeout2_.get_timer().force_expiration();
+    n = f.ctx_.poll();
+    BOOST_TEST(n == 2u);
+    BOOST_TEST(invoked1 == 1);
+    BOOST_TEST(invoked2 == 1);
 }
 
 BOOST_AUTO_TEST_CASE(timeout_wait_timed_out_immediately)
 {
     basic_timeout_fixture f;
-    f.timeout_.expires_from_now(-timeout);
+    f.timeout1_.expires_from_now(-timeout1);
 
     int invoked = 0;
-    f.timeout_.async_wait([&](boost::system::error_code ec) {
+    f.timeout1_.async_wait([&](boost::system::error_code ec) {
         ++invoked;
         BOOST_TEST(!ec);
         BOOST_ASSERT(f.ctx_.get_executor().running_in_this_thread());
@@ -173,10 +193,10 @@ BOOST_AUTO_TEST_CASE(timeout_wait_timed_out_immediately)
 BOOST_AUTO_TEST_CASE(timeout_wait_cancelled)
 {
     basic_timeout_fixture f;
-    f.timeout_.expires_from_now(timeout);
+    f.timeout1_.expires_from_now(timeout1);
 
     int invoked = 0;
-    f.timeout_.async_wait([&](boost::system::error_code ec) {
+    f.timeout1_.async_wait([&](boost::system::error_code ec) {
         BOOST_TEST(ec == boost::asio::error::operation_aborted);
         ++invoked;
         BOOST_ASSERT(f.ctx_.get_executor().running_in_this_thread());
@@ -184,8 +204,8 @@ BOOST_AUTO_TEST_CASE(timeout_wait_cancelled)
 
     auto n = f.ctx_.poll();
     BOOST_TEST(n == 0u);
-    BOOST_TEST(f.timeout_.cancel());
-    f.timeout_.get_timer().force_expiration();
+    BOOST_TEST(f.timeout1_.cancel());
+    f.timeout1_.get_timer().force_expiration();
     n = f.ctx_.poll();
     BOOST_TEST(n == 2u);
     BOOST_TEST(invoked == 1);

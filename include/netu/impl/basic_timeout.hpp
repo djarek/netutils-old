@@ -24,7 +24,7 @@ struct timeout_entry : boost::intrusive::set_base_hook<>
     friend bool operator<(timeout_entry const& lhs,
                           timeout_entry const& rhs) noexcept
     {
-        return lhs < rhs;
+        return lhs.expiry < rhs.expiry;
     }
 };
 
