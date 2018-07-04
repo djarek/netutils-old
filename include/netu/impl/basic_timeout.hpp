@@ -184,10 +184,7 @@ public:
     // private:
     void reschedule()
     {
-        if (timeouts_.empty())
-        {
-            return;
-        }
+        BOOST_ASSERT(!timeouts_.empty());
 
         timer_.expires_at(timeouts_.begin()->expiry);
         timer_.async_wait([this](boost::system::error_code ec) {
