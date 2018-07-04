@@ -223,4 +223,29 @@ BOOST_AUTO_TEST_CASE(timeout_wait_cancelled)
     BOOST_TEST(invoked2 == 0);
 }
 
+BOOST_AUTO_TEST_CASE(timeout_reset)
+{
+    basic_timeout_fixture f;
+
+    f.timeout1_.expires_from_now(timeout1);
+    int invoked1 = 0;
+    f.timeout1_.async_wait([&](boost::system::error_code ec) {
+        BOOST_TEST(ec != boost::asio::error::operation_aborted);
+        ++invoked1;
+        BOOST_ASSERT(f.ctx_.get_executor().running_in_this_thread());
+    });
+
+    auto n = f.ctx_.poll();
+    BOOST_TEST(n == 0);
+    f.timeout1_.expires_from_now(timeout1);
+    n = f.ctx_.poll();
+    BOOST_TEST(n > 0u);
+    BOOST_TEST(invoked1 == 0);
+
+    f.timeout1_.expires_from_now(timeout1);
+    n = f.ctx_.poll();
+    BOOST_TEST(n > 0u);
+    BOOST_TEST(invoked1 == 0);
+}
+
 } // namespace netu
