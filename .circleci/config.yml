@@ -15,5 +15,5 @@ jobs:
         command: tools/coverage.sh
         name: Coverage
     - run:
-        command: bash <(curl -s https://codecov.io/bash)
+        command: curl -s https://codecov.io/bash -o codecov && bash ./codecov -X gcov -f build/coverage.info -y ./.codecov.yml
         name: Upload to CodeCov
