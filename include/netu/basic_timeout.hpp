@@ -79,11 +79,6 @@ public:
     {
         return this->get_service().expiry(this->get_implementation());
     }
-
-    Timer& get_timer()
-    {
-        return this->get_service().timer_;
-    }
 };
 
 } // namespace netu

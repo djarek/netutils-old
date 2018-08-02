@@ -160,7 +160,7 @@ BOOST_AUTO_TEST_CASE(timeout_wait_timed_out)
 
     auto n = f.ctx_.poll();
     BOOST_TEST(n == 0u);
-    f.timeout1_.get_timer().force_expiration();
+    // f.timeout1_.get_timer().force_expiration();
     n = f.ctx_.poll();
     BOOST_TEST(n > 0u);
     BOOST_TEST(invoked1 == 1);
@@ -168,7 +168,7 @@ BOOST_AUTO_TEST_CASE(timeout_wait_timed_out)
 
     n = f.ctx_.poll();
     BOOST_TEST(n == 0u);
-    f.timeout2_.get_timer().force_expiration();
+    // f.timeout2_.get_timer().force_expiration();
     n = f.ctx_.poll();
     BOOST_TEST(n > 0u);
     BOOST_TEST(invoked1 == 1);
@@ -214,7 +214,7 @@ BOOST_AUTO_TEST_CASE(timeout_wait_cancelled)
         auto n = f.ctx_.poll();
         BOOST_TEST(n == 0u);
         BOOST_TEST(f.timeout1_.cancel());
-        f.timeout1_.get_timer().force_expiration();
+        // f.timeout1_.get_timer().force_expiration();
         n = f.ctx_.poll();
         BOOST_TEST(n > 0u);
         BOOST_TEST(invoked1 == 1);
