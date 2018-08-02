@@ -127,8 +127,17 @@ public:
 
     void move_construct(timeout_entry& to, timeout_entry& from)
     {
-        apply([&to, &from](state&) { to = detail::exchange(from, {}); },
-              synchronized_state_);
+        apply(
+          [&to, &from](state& s) {
+              to.expiry = detail::exchange(from.expiry, {});
+              to.handler = std::move(from.handler);
+              if (from.is_linked())
+              {
+                  s.timeouts_.erase(from);
+                  s.timeouts_.insert(to);
+              }
+          },
+          synchronized_state_);
     }
 
     void move_assign(timeout_entry& to,
@@ -137,13 +146,34 @@ public:
     {
         if (&other == this)
         {
-            apply([&to, &from](state&) { to = detail::exchange(from, {}); },
-                  synchronized_state_);
+            apply(
+              [this, &to, &from](state& s) {
+                  internal_cancel(s, to);
+                  to.expiry = detail::exchange(from.expiry, {});
+                  to.handler = std::move(from.handler);
+                  if (from.is_linked())
+                  {
+                      auto const it = std::next(list_type::s_iterator_to(from));
+                      s.timeouts_.erase(from);
+                      s.timeouts_.insert_before(it, to);
+                  }
+              },
+              synchronized_state_);
         }
         else
         {
             apply(
-              [&to, &from](state&, state&) { to = detail::exchange(from, {}); },
+              [this, &to, &from, &other](state& this_state,
+                                         state& other_state) {
+                  other.internal_cancel(other_state, to);
+                  to.expiry = detail::exchange(from.expiry, {});
+                  to.handler = std::move(from.handler);
+                  if (from.is_linked())
+                  {
+                      other_state.timeouts_.erase(from);
+                      this_state.timeouts_.insert(to);
+                  }
+              },
               synchronized_state_,
               other.synchronized_state_);
         }
@@ -151,22 +181,14 @@ public:
 
     void destroy(timeout_entry& e)
     {
-        apply(
-          [&e](state& s) {
-              if (e.is_linked())
-              {
-                  s.timeouts_.erase(list_type::s_iterator_to(e));
-              }
-              try_invoke(e.handler, boost::asio::error::operation_aborted);
-          },
-          synchronized_state_);
+        apply([this, &e](state& s) { internal_cancel(s, e); },
+              synchronized_state_);
     }
 
     template<typename CompletionToken>
     auto async_wait(timeout_entry& e, CompletionToken&& tok)
       -> detail::wait_completion_result_t<CompletionToken>
     {
-
         return apply(
           [&e, &tok, this](state&) {
               detail::wait_completion_t<CompletionToken> init{tok};
@@ -217,25 +239,26 @@ public:
 
     bool cancel(timeout_entry& e)
     {
-        return apply(
-          [&e, this](state& s) {
-              if (e.is_linked())
-              {
-                  bool const needs_reschedule = is_first_in(e, s.timeouts_);
-                  s.timeouts_.erase(list_type::s_iterator_to(e));
-                  if (needs_reschedule && !s.timeouts_.empty())
-                  {
-                      reschedule(s);
-                  }
-              }
-
-              return try_invoke(e.handler,
-                                boost::asio::error::operation_aborted);
-          },
-          synchronized_state_);
+        return apply([&e, this](state& s) { return internal_cancel(s, e); },
+                     synchronized_state_);
     }
 
-    // private:
+private:
+    bool internal_cancel(state& s, timeout_entry& e)
+    {
+        if (e.is_linked())
+        {
+            bool const needs_reschedule = is_first_in(e, s.timeouts_);
+            s.timeouts_.erase(list_type::s_iterator_to(e));
+            if (needs_reschedule && !s.timeouts_.empty())
+            {
+                reschedule(s);
+            }
+        }
+
+        return try_invoke(e.handler, boost::asio::error::operation_aborted);
+    }
+
     void reschedule(state& s)
     {
         BOOST_ASSERT(!s.timeouts_.empty());
