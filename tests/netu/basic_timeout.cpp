@@ -131,7 +131,7 @@ BOOST_AUTO_TEST_CASE(timeout_destructor_cancels)
     BOOST_TEST(invoked == 1);
 }
 
-BOOST_AUTO_TEST_CASE(timeout_move_assignment_cancels)
+BOOST_AUTO_TEST_CASE(timeout_move_assignment_into_active_cancels)
 {
     boost::asio::io_context ctx;
     basic_timeout<boost::asio::steady_timer> t{ctx};
