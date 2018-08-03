@@ -168,6 +168,45 @@ BOOST_AUTO_TEST_CASE(timeout_move_assignment_into_active_cancels)
     BOOST_TEST(invoked == 1);
 }
 
+BOOST_AUTO_TEST_CASE(timeout_move_assignment_from_active_does_not_cancel)
+{
+    boost::asio::io_context ctx;
+    basic_timeout<boost::asio::steady_timer> t1{ctx};
+
+    int invoked = 0;
+    t1.expires_from_now(duration1);
+    t1.async_wait(verify_success{invoked, ctx.get_executor()});
+    basic_timeout<boost::asio::steady_timer> t2{ctx};
+
+    boost::asio::post(ctx.get_executor(),
+                      [&ctx, &t1, &t2]() { t2 = std::move(t1); });
+
+    ctx.run();
+
+    BOOST_TEST(invoked == 1);
+}
+
+BOOST_AUTO_TEST_CASE(
+  timeout_move_assignment_from_foreign_context_does_not_cancel)
+{
+    boost::asio::io_context ctx1;
+    boost::asio::io_context ctx2;
+
+    basic_timeout<boost::asio::steady_timer> t1{ctx1};
+    basic_timeout<boost::asio::steady_timer> t2{ctx2};
+
+    int invoked = 0;
+    t1.expires_from_now(duration1);
+    t1.async_wait(verify_success{invoked, ctx2.get_executor()});
+
+    boost::asio::post(ctx2.get_executor(),
+                      [&ctx2, &t1, &t2]() { t2 = std::move(t1); });
+
+    ctx2.run();
+
+    BOOST_TEST(invoked == 1);
+}
+
 BOOST_AUTO_TEST_CASE(timeout_reset)
 {
     basic_timeout_fixture f;
