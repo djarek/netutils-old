@@ -29,6 +29,48 @@ struct basic_timeout_fixture
 const auto duration1 = std::chrono::milliseconds{100};
 const auto duration2 = std::chrono::milliseconds{300};
 
+class verify_success
+{
+public:
+    verify_success(int& invoked, boost::asio::io_context::executor_type ex)
+      : invoked_{invoked}
+      , executor_{std::move(ex)}
+    {
+    }
+
+    void operator()(boost::system::error_code ec)
+    {
+        ++invoked_;
+        BOOST_TEST(!ec);
+        BOOST_TEST(executor_.running_in_this_thread());
+    }
+
+private:
+    int& invoked_;
+    boost::asio::io_context::executor_type executor_;
+};
+
+class verify_canceled
+{
+public:
+    verify_canceled(int& invoked, boost::asio::io_context::executor_type ex)
+      : invoked_{invoked}
+      , executor_{std::move(ex)}
+    {
+    }
+
+    void operator()(boost::system::error_code ec)
+    {
+        ++invoked_;
+        BOOST_TEST(ec == boost::asio::error::operation_aborted);
+        BOOST_TEST(executor_.running_in_this_thread());
+    }
+
+private:
+    int& invoked_;
+    boost::asio::io_context::executor_type executor_;
+};
+
 BOOST_AUTO_TEST_CASE(timeout_wait_timed_out)
 {
     basic_timeout_fixture f;
@@ -37,17 +79,9 @@ BOOST_AUTO_TEST_CASE(timeout_wait_timed_out)
 
     int invoked1 = 0;
     int invoked2 = 0;
-    f.timeout1_.async_wait([&](boost::system::error_code ec) {
-        ++invoked1;
-        BOOST_TEST(!ec);
-        BOOST_ASSERT(f.ctx_.get_executor().running_in_this_thread());
-    });
+    f.timeout1_.async_wait(verify_success{invoked1, f.ctx_.get_executor()});
 
-    f.timeout2_.async_wait([&](boost::system::error_code ec) {
-        ++invoked2;
-        BOOST_TEST(!ec);
-        BOOST_ASSERT(f.ctx_.get_executor().running_in_this_thread());
-    });
+    f.timeout2_.async_wait(verify_success{invoked2, f.ctx_.get_executor()});
 
     auto n = f.ctx_.poll();
     BOOST_TEST(n == 0u);
@@ -71,11 +105,7 @@ BOOST_AUTO_TEST_CASE(timeout_wait_timed_out_immediately)
     f.timeout1_.expires_from_now(-duration1);
 
     int invoked = 0;
-    f.timeout1_.async_wait([&](boost::system::error_code ec) {
-        ++invoked;
-        BOOST_TEST(!ec);
-        BOOST_ASSERT(f.ctx_.get_executor().running_in_this_thread());
-    });
+    f.timeout1_.async_wait(verify_success{invoked, f.ctx_.get_executor()});
     f.ctx_.poll();
     BOOST_TEST(invoked == 1);
 }
@@ -89,17 +119,11 @@ BOOST_AUTO_TEST_CASE(timeout_wait_cancelled)
         f.timeout2_.expires_from_now(duration2 * 2);
 
         int invoked1 = 0;
-        f.timeout1_.async_wait([&](boost::system::error_code ec) {
-            BOOST_TEST(ec == boost::asio::error::operation_aborted);
-            ++invoked1;
-            BOOST_ASSERT(f.ctx_.get_executor().running_in_this_thread());
-        });
+        f.timeout1_.async_wait(
+          verify_canceled{invoked1, f.ctx_.get_executor()});
 
-        f.timeout2_.async_wait([&](boost::system::error_code ec) {
-            BOOST_TEST(ec == boost::asio::error::operation_aborted);
-            ++invoked2;
-            BOOST_ASSERT(f.ctx_.get_executor().running_in_this_thread());
-        });
+        f.timeout2_.async_wait(
+          verify_canceled{invoked2, f.ctx_.get_executor()});
 
         auto n = f.ctx_.poll();
         BOOST_TEST(n == 0u);
@@ -119,11 +143,7 @@ BOOST_AUTO_TEST_CASE(timeout_destructor_cancels)
     t->expires_from_now(duration1);
 
     int invoked = 0;
-    t->async_wait([&ctx, &invoked](boost::system::error_code ec) {
-        BOOST_TEST(ec == boost::asio::error::operation_aborted);
-        ++invoked;
-        BOOST_ASSERT(ctx.get_executor().running_in_this_thread());
-    });
+    t->async_wait(verify_canceled{invoked, ctx.get_executor()});
 
     boost::asio::post(ctx.get_executor(), [&t]() { t.reset(); });
     ctx.run();
@@ -138,11 +158,7 @@ BOOST_AUTO_TEST_CASE(timeout_move_assignment_into_active_cancels)
 
     int invoked = 0;
     t.expires_from_now(duration1);
-    t.async_wait([&ctx, &invoked](boost::system::error_code ec) {
-        BOOST_TEST(ec == boost::asio::error::operation_aborted);
-        ++invoked;
-        BOOST_ASSERT(ctx.get_executor().running_in_this_thread());
-    });
+    t.async_wait(verify_canceled{invoked, ctx.get_executor()});
 
     boost::asio::post(ctx.get_executor(), [&ctx, &t]() {
         t = basic_timeout<boost::asio::steady_timer>{ctx};
@@ -158,11 +174,7 @@ BOOST_AUTO_TEST_CASE(timeout_reset)
 
     f.timeout1_.expires_from_now(duration1);
     int invoked1 = 0;
-    f.timeout1_.async_wait([&](boost::system::error_code ec) {
-        BOOST_TEST(ec != boost::asio::error::operation_aborted);
-        ++invoked1;
-        BOOST_ASSERT(f.ctx_.get_executor().running_in_this_thread());
-    });
+    f.timeout1_.async_wait(verify_canceled{invoked1, f.ctx_.get_executor()});
 
     auto n = f.ctx_.poll();
     BOOST_TEST(n == 0);
