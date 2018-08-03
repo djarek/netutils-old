@@ -141,42 +141,17 @@ public:
     }
 
     void move_assign(timeout_entry& to,
-                     basic_timeout_service& other,
+                     basic_timeout_service& /*other*/,
                      timeout_entry& from)
     {
-        if (&other == this)
-        {
-            apply(
-              [this, &to, &from](state& s) {
-                  internal_cancel(s, to);
-                  to.expiry = detail::exchange(from.expiry, {});
-                  to.handler = std::move(from.handler);
-                  if (from.is_linked())
-                  {
-                      auto const it = std::next(list_type::s_iterator_to(from));
-                      s.timeouts_.erase(from);
-                      s.timeouts_.insert_before(it, to);
-                  }
-              },
-              synchronized_state_);
-        }
-        else
-        {
-            apply(
-              [this, &to, &from, &other](state& this_state,
-                                         state& other_state) {
-                  other.internal_cancel(other_state, to);
-                  to.expiry = detail::exchange(from.expiry, {});
-                  to.handler = std::move(from.handler);
-                  if (from.is_linked())
-                  {
-                      other_state.timeouts_.erase(from);
-                      this_state.timeouts_.insert(to);
-                  }
-              },
-              synchronized_state_,
-              other.synchronized_state_);
-        }
+        apply(
+          [this, &to, &from](state& s) {
+              internal_cancel(s, to);
+              to.expiry = detail::exchange(from.expiry, {});
+              BOOST_ASSERT(!from.is_linked());
+              BOOST_ASSERT(!from.handler);
+          },
+          synchronized_state_);
     }
 
     void destroy(timeout_entry& e)
