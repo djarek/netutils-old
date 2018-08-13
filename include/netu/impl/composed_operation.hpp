@@ -15,30 +15,12 @@
 namespace netu
 {
 
-template<typename ComposedOp>
-template<typename... Args>
-upcall_guard
-yield_token<ComposedOp>::post_upcall(Args&&... args)
-{
-    return op_.post_upcall(std::forward<Args>(args)...);
-}
-
-template<typename ComposedOp>
-template<typename... Args>
-upcall_guard
-yield_token<ComposedOp>::upcall(Args&&... args)
-{
-    BOOST_ASSERT(is_continuation && "Direct upcall can only be used in a "
-                                    "continuation. Use post_upcall instead.");
-    return op_.upcall(std::forward<Args>(args)...);
-}
-
 namespace detail
 {
 
 template<typename Executor>
 auto
-running_in_this_thread(Executor const& ex)
+running_in_this_thread(Executor const& ex, std::nullptr_t)
   -> decltype(ex.running_in_this_thread())
 {
     return ex.running_in_this_thread();
@@ -226,12 +208,13 @@ run_composed_op(IoObject& iob,
 {
     boost::asio::async_completion<CompletionToken, Signature> init{tok};
 
-    auto ex = boost::asio::get_associated_executor(init.completion_handler,
-                                                   iob.get_executor());
-    composed_op<OperationBody,
-                typename decltype(init)::completion_handler_type,
-                decltype(ex)>
-      op{std::move(init.completion_handler), ex, std::forward<Args>(args)...};
+    auto const ex = boost::asio::get_associated_executor(
+      init.completion_handler, iob.get_executor());
+    using op_t = composed_op<OperationBody,
+                             typename decltype(init)::completion_handler_type,
+                             decltype(ex)>;
+    op_t op{
+      std::move(init.completion_handler), ex, std::forward<Args>(args)...};
     op.run();
     return init.result.get();
 }
@@ -250,9 +233,8 @@ run_composed_op(IoObject& iob,
 {
     boost::asio::async_completion<CompletionToken, Signature> init{tok};
 
-    auto ex = boost::asio::get_associated_executor(init.completion_handler,
-
-                                                   iob.get_executor());
+    auto const ex = boost::asio::get_associated_executor(
+      init.completion_handler, iob.get_executor());
     using op_t =
       detail::stable_composed_op<typename std::decay<OperationBody>::type,
                                  typename decltype(
@@ -265,6 +247,27 @@ run_composed_op(IoObject& iob,
 }
 
 } // namespace detail
+
+template<typename ComposedOp>
+template<typename... Args>
+upcall_guard
+yield_token<ComposedOp>::post_upcall(Args&&... args) &&
+{
+    return op_.post_upcall(std::forward<Args>(args)...);
+}
+
+template<typename ComposedOp>
+template<typename... Args>
+upcall_guard
+yield_token<ComposedOp>::upcall(Args&&... args) &&
+{
+    BOOST_ASSERT(is_continuation && "Direct upcall can only be used in a "
+                                    "continuation. Use post_upcall instead.");
+    BOOST_ASSERT(detail::running_in_this_thread(op_.get_executor(), nullptr) &&
+                 "Direct upcall must not be performed outside of the "
+                 "CompletionHandler's Executor context.");
+    return op_.upcall(std::forward<Args>(args)...);
+}
 
 template<typename Signature,
          typename OperationBody,

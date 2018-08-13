@@ -35,7 +35,7 @@ async_test(boost::asio::steady_timer& timer, CompletionToken&& tok)
           NETU_REENTER(yield_token)
           {
               if (check_if_can_complete_immediately(timer))
-                  return yield_token.post_upcall(ec);
+                  return std::move(yield_token).post_upcall(ec);
 
               for (i = 0; i < 5; ++i)
               {
@@ -47,7 +47,7 @@ async_test(boost::asio::steady_timer& timer, CompletionToken&& tok)
                   }
               }
 
-              return yield_token.upcall(ec);
+              return std::move(yield_token).upcall(ec);
           }
       });
 }
@@ -62,7 +62,7 @@ struct noncopyable_op : boost::noncopyable
         NETU_REENTER(yield_token)
         {
             if (check_if_can_complete_immediately(timer_))
-                return yield_token.post_upcall(ec);
+                return std::move(yield_token).post_upcall(ec);
 
             for (i_ = 0; i_ < 5; ++i_)
             {
@@ -71,7 +71,7 @@ struct noncopyable_op : boost::noncopyable
                 if (ec)
                     return yield_token.upcall(ec);
             }
-            return yield_token.upcall(ec);
+            return std::move(yield_token).upcall(ec);
         }
     }
 
@@ -107,7 +107,7 @@ async_test2(TimerType& timer, std::chrono::seconds d, CompletionToken&& tok)
           NETU_REENTER(yield_token)
           {
               if (check_if_can_complete_immediately(timer))
-                  return yield_token.post_upcall(ec);
+                  return std::move(yield_token).post_upcall(ec);
 
               for (i = 0; i < 5; ++i)
               {
@@ -117,7 +117,7 @@ async_test2(TimerType& timer, std::chrono::seconds d, CompletionToken&& tok)
                       break;
               }
 
-              return yield_token.upcall(ec);
+              return std::move(yield_token).upcall(ec);
           }
       });
 }

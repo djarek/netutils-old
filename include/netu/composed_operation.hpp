@@ -26,13 +26,13 @@ template<typename ComposedOp>
 struct yield_token
 {
     ComposedOp& op_;
-    bool is_continuation = false; // TODO: leverage the coro state for this?
+    bool is_continuation = false; // TODO: use the coro state for this?
 
     template<typename... Args>
-    upcall_guard post_upcall(Args&&... args);
+    upcall_guard post_upcall(Args&&... args) &&;
 
     template<typename... Args>
-    upcall_guard upcall(Args&&... args);
+    upcall_guard upcall(Args&&... args) &&;
 };
 
 template<typename Signature,
