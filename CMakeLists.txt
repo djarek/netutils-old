@@ -26,7 +26,7 @@ find_package (Threads)
 
 add_library(core INTERFACE)
 
-target_compile_features(core INTERFACE cxx_std_11)
+
 
 target_include_directories(core INTERFACE
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>

@@ -10,30 +10,81 @@
 #ifndef NETU_COMPOSED_OPERATION_HPP
 #define NETU_COMPOSED_OPERATION_HPP
 
-#include <boost/asio/coroutine.hpp>
-#include <boost/asio/post.hpp>
-#include <boost/beast/core/bind_handler.hpp>
-#include <boost/beast/core/handler_ptr.hpp>
+#include <netu/detail/composed_operation.hpp>
 
 namespace netu
 {
 
-// TODO: allow users to disable the use of [[nodiscard]] (causes warnings
-// with -pedantic in C++14 or lower)
-struct [[nodiscard]] upcall_guard{};
-
 template<typename ComposedOp>
-struct yield_token
+class yield_token
 {
-    ComposedOp& op_;
-    bool is_continuation = false; // TODO: use the coro state for this?
+public:
+    template<typename DeducedOp>
+    yield_token(DeducedOp&& op, bool is_continuation)
+      : op_{std::forward<DeducedOp>(op)}
+      , is_continuation_{is_continuation}
+
+    {
+    }
+
+    auto release_operation() && -> typename std::decay<ComposedOp>::type
+    {
+        return std::move(op_);
+    }
 
     template<typename... Args>
     upcall_guard post_upcall(Args&&... args) &&;
 
     template<typename... Args>
+    upcall_guard direct_upcall(Args&&... args) &&;
+
+    template<typename... Args>
     upcall_guard upcall(Args&&... args) &&;
+
+    bool is_continuation() const
+    {
+        return is_continuation_;
+    }
+
+private:
+    ComposedOp op_;
+    bool is_continuation_;
 };
+
+template<typename T>
+struct bound_handler
+{
+    using executor_type = boost::asio::associated_executor_t<T>;
+    using allocator_type = boost::asio::associated_allocator_t<T>;
+
+    executor_type get_executor() const noexcept
+    {
+        return boost::asio::get_associated_executor(t_);
+    }
+
+    allocator_type get_allocator() const noexcept
+    {
+        return boost::asio::get_associated_allocator(t_);
+    }
+
+    template<typename... Args>
+    void operator()(Args&&... args)
+    {
+        return t_(std::forward<Args>(args)...);
+    }
+
+    T t_;
+};
+
+template<typename ComposedOp, typename... Args>
+auto
+bind_token(yield_token<ComposedOp>&& token, Args&&... args) -> bound_handler<
+  decltype(boost::beast::bind_handler(std::move(token).release_operation(),
+                                      std::forward<Args>(args)...))>
+{
+    return {boost::beast::bind_handler(std::move(token).release_operation(),
+                                       std::forward<Args>(args)...)};
+}
 
 template<typename Signature,
          typename OperationBody,
@@ -63,6 +114,18 @@ auto
 run_composed_op(IoObject& iob, CompletionToken&& tok, OperationBody&& cb)
   -> BOOST_ASIO_INITFN_RESULT_TYPE(CompletionToken, Signature);
 
+template<typename OperationBody, typename IoObject, typename CompletionHandler>
+using yield_token_t = yield_token<
+  detail::composed_op<OperationBody,
+                      CompletionHandler,
+                      decltype(std::declval<IoObject&>().get_executor())>>;
+
+template<typename OperationBody, typename IoObject, typename CompletionHandler>
+using stable_yield_token_t = yield_token<detail::stable_composed_op<
+  OperationBody,
+  CompletionHandler,
+  decltype(std::declval<IoObject&>().get_executor())>>;
+
 } // namespace netu
 
 namespace boost
@@ -75,7 +138,24 @@ class async_result<netu::yield_token<ComposedOp>, Signature>
 {
 public:
     using return_type = netu::upcall_guard;
-    using completion_handler_type = ComposedOp;
+    using completion_handler_type = typename std::decay<ComposedOp>::type;
+
+    explicit async_result(completion_handler_type&)
+    {
+    }
+
+    return_type get()
+    {
+        return {};
+    }
+};
+
+template<typename Handler, typename Signature>
+class async_result<netu::bound_handler<Handler>, Signature>
+{
+public:
+    using return_type = netu::upcall_guard;
+    using completion_handler_type = netu::bound_handler<Handler>;
 
     explicit async_result(completion_handler_type&)
     {
@@ -89,33 +169,6 @@ public:
 
 } // namespace asio
 } // namespace boost
-
-// TODO: don't use stuff from detail?
-#define NETU_REENTER(c)                                                        \
-    switch (::boost::asio::detail::coroutine_ref _coro_value = c.op_.coro_)    \
-    case -1:                                                                   \
-        if (_coro_value)                                                       \
-        {                                                                      \
-            default:                                                           \
-                __builtin_unreachable();                                       \
-        }                                                                      \
-        else /* fall-through */                                                \
-        case 0:
-
-#define NETU_YIELD_IMPL(n)                                                     \
-    for (_coro_value = (n);;)                                                  \
-        if (_coro_value == 0)                                                  \
-        {                                                                      \
-            case (n):;                                                         \
-                break;                                                         \
-        }                                                                      \
-        else
-
-#if defined(_MSC_VER)
-#define NETU_YIELD NETU_YIELD_IMPL(__COUNTER__ + 1)
-#else // defined(_MSC_VER)
-#define NETU_YIELD NETU_YIELD_IMPL(__LINE__)
-#endif // defined(_MSC_VER)
 
 #include <netu/impl/composed_operation.hpp>
 
