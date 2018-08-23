@@ -188,8 +188,55 @@ struct async_test_coroutine_termination
     }
 };
 
-using op_type_list =
-  boost::mpl::list<async_test_noncopyable, async_test_tag_dispatch>;
+struct async_test_copyable
+{
+    template<typename TimerType>
+    struct op
+    {
+
+        template<typename YieldToken>
+        upcall_guard operator()(YieldToken&& yield_token,
+                                boost::system::error_code ec = {})
+        {
+            NETU_REENTER(coro_state_)
+            {
+                if (i_ == 0)
+                    NETU_RETURN std::move(yield_token).upcall(ec);
+
+                for (i_ = 0; i_ < 5; ++i_)
+                {
+                    timer_.expires_from_now(duration_);
+                    NETU_YIELD timer_.async_wait(std::move(yield_token));
+                    if (ec)
+                        NETU_RETURN std::move(yield_token).direct_upcall(ec);
+                }
+                NETU_RETURN std::move(yield_token).direct_upcall(ec);
+            }
+        }
+
+        TimerType& timer_;
+        std::chrono::milliseconds duration_;
+        int i_;
+        netu::coroutine coro_state_{};
+    };
+
+    template<typename TimerType, typename CompletionToken>
+    auto operator()(TimerType& timer,
+                    std::chrono::milliseconds d,
+                    int i,
+                    CompletionToken&& tok)
+      -> BOOST_ASIO_INITFN_RESULT_TYPE(CompletionToken,
+                                       void(boost::system::error_code))
+    {
+        return run_composed_op<void(boost::system::error_code)>(
+          timer,
+          std::forward<CompletionToken>(tok),
+          op<TimerType>{timer, d, i});
+    }
+};
+
+using op_type_list = boost::mpl::
+  list<async_test_noncopyable, async_test_tag_dispatch, async_test_copyable>;
 
 BOOST_AUTO_TEST_CASE_TEMPLATE(composed_operation, AsyncOpType, op_type_list)
 {
