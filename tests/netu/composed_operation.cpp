@@ -160,6 +160,49 @@ struct async_test_tag_dispatch
     }
 };
 
+struct async_test_coroutine_termination
+{
+
+    template<typename TimerType>
+    struct op
+    {
+        template<typename YieldToken>
+        upcall_guard operator()(YieldToken&& yield_token,
+                                boost::system::error_code ec = {})
+        {
+            NETU_REENTER(coro_state_)
+            {
+            }
+
+            BOOST_TEST(coro_state_.is_complete());
+            return std::move(yield_token).upcall(ec);
+        }
+
+        TimerType& timer_;
+        std::chrono::milliseconds duration_;
+        int i_;
+        netu::coroutine coro_state_{};
+    };
+
+    template<typename TimerType, typename CompletionToken>
+    auto operator()(TimerType& timer,
+                    std::chrono::milliseconds d,
+                    int i,
+                    CompletionToken&& tok)
+      -> BOOST_ASIO_INITFN_RESULT_TYPE(CompletionToken,
+                                       void(boost::system::error_code))
+    {
+        return run_stable_composed_op<void(boost::system::error_code),
+                                      op<TimerType>>(
+          timer,
+          std::forward<CompletionToken>(tok),
+          std::piecewise_construct,
+          timer,
+          d,
+          i);
+    }
+};
+
 using op_type_list =
   boost::mpl::list<async_test_noncopyable, async_test_tag_dispatch>;
 
