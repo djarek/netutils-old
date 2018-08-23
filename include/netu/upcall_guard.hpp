@@ -15,12 +15,15 @@
 namespace netu
 {
 
-// TODO: allow users to disable the use of [[nodiscard]] (causes warnings
-// with -pedantic in C++14 or lower)
+#ifndef NETU_NO_NODISCARD
 struct [[nodiscard]] upcall_guard
 {
 };
-
+#else
+struct upcall_guard
+{
+};
+#endif // NETU_NO_NODISCARD
 } // namespace netu
 
 #endif // NETU_UPCALL_GUARD_HPP
