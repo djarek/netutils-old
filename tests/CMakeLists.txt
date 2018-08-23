@@ -1,5 +1,6 @@
 set (netu_tests_srcs
     netu/completion_handler.cpp
+    netu/composed_operation.cpp
     netu/synchronized_value.cpp
     netu/synchronized_stream.cpp)
 
