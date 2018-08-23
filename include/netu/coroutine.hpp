@@ -10,6 +10,8 @@
 #ifndef NETU_COROUTINE_HPP
 #define NETU_COROUTINE_HPP
 
+#include <netu/detail/assume.hpp>
+
 namespace netu
 {
 
@@ -43,8 +45,7 @@ private:
         if (_coro_value)                                                       \
         {                                                                      \
             default:                                                           \
-                BOOST_ASSERT(false && "Corrupt coro state.");                  \
-                __builtin_unreachable();                                       \
+                NETU_ASSUME(false && "Corrupt coro state.");                   \
         }                                                                      \
         else /* fall-through */                                                \
         case 0:

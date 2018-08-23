@@ -11,6 +11,7 @@
 #define NETU_DETAIL_COROUTINE_HPP
 
 #include <netu/coroutine.hpp>
+#include <netu/detail/assume.hpp>
 
 namespace netu
 {
@@ -39,7 +40,7 @@ public:
 
     operator int() const
     {
-        BOOST_ASSERT(ref_ != nullptr);
+        NETU_ASSUME(ref_ != nullptr);
         return ref_->state_;
     }
 
