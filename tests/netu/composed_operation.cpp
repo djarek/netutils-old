@@ -162,8 +162,6 @@ struct async_test_tag_dispatch
 
 struct async_test_coroutine_termination
 {
-
-    template<typename TimerType>
     struct op
     {
         template<typename YieldToken>
@@ -177,29 +175,16 @@ struct async_test_coroutine_termination
             BOOST_TEST(coro_state_.is_complete());
             return std::move(yield_token).upcall(ec);
         }
-
-        TimerType& timer_;
-        std::chrono::milliseconds duration_;
-        int i_;
         netu::coroutine coro_state_{};
     };
 
-    template<typename TimerType, typename CompletionToken>
-    auto operator()(TimerType& timer,
-                    std::chrono::milliseconds d,
-                    int i,
-                    CompletionToken&& tok)
+    template<typename CompletionToken>
+    auto operator()(boost::asio::io_context& ctx, CompletionToken&& tok)
       -> BOOST_ASIO_INITFN_RESULT_TYPE(CompletionToken,
                                        void(boost::system::error_code))
     {
-        return run_stable_composed_op<void(boost::system::error_code),
-                                      op<TimerType>>(
-          timer,
-          std::forward<CompletionToken>(tok),
-          std::piecewise_construct,
-          timer,
-          d,
-          i);
+        return run_stable_composed_op<void(boost::system::error_code)>(
+          ctx, std::forward<CompletionToken>(tok), op{});
     }
 };
 
@@ -229,6 +214,24 @@ BOOST_AUTO_TEST_CASE_TEMPLATE(composed_operation, AsyncOpType, op_type_list)
         BOOST_TEST(invoked == 1);
         BOOST_TEST(!ec);
     }
+}
+
+BOOST_AUTO_TEST_CASE(coroutine_completion)
+{
+    boost::asio::io_context ctx;
+    int invoked = 0;
+    boost::system::error_code ec;
+    async_test_coroutine_termination async_op;
+
+    async_op(ctx, [&invoked, &ec](boost::system::error_code ec_arg) {
+        ec = ec_arg;
+        ++invoked;
+    });
+
+    ctx.run();
+
+    BOOST_TEST(invoked == 1);
+    BOOST_TEST(!ec);
 }
 
 } // namespace netu
