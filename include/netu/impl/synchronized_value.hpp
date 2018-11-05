@@ -81,6 +81,55 @@ apply(Callable&& f, synchronized_value<Ts, Lockables> const&... svs)
     return std::forward<Callable>(f)(svs.value_...);
 }
 
+template<typename Callable, typename SynchronizedValue>
+class synchronized_function
+{
+    Callable func_;
+    SynchronizedValue& sv_;
+
+public:
+    template<typename U>
+    explicit synchronized_function(U&& f, SynchronizedValue& sv)
+      : func_{std::forward<U>(f)}
+      , sv_{sv}
+    {
+    }
+
+    template<typename... Args>
+    auto operator()(Args&&... args) -> decltype(
+      this->func_(std::declval<typename SynchronizedValue::value_type&>(),
+                  std::forward<Args>(args)...))
+    {
+        return apply(
+          [this, &args...](typename SynchronizedValue::value_type& t) {
+              func_(t, std::forward<Args>(args)...);
+          },
+          sv_);
+    }
+};
+
+template<typename Callable, typename T, typename Lockable>
+auto
+synchronize(Callable&& func, synchronized_value<T, Lockable>& sv)
+  -> synchronized_function<typename std::decay<Callable>::type,
+                           synchronized_value<T, Lockable>>
+{
+    return synchronized_function<typename std::decay<Callable>::type,
+                                 synchronized_value<T, Lockable>>{
+      std::forward<Callable>(func), sv};
+}
+
+template<typename Callable, typename T, typename Lockable>
+auto
+synchronize(Callable&& func, synchronized_value<T, Lockable> const& sv)
+  -> synchronized_function<typename std::decay<Callable>::type,
+                           const synchronized_value<T, Lockable>>
+{
+    return synchronized_function<typename std::decay<Callable>::type,
+                                 const synchronized_value<T, Lockable>>{
+      std::forward<Callable>(func), sv};
+}
+
 } // namespace netu
 
 #endif // NETU_SYNCHRONIZED_VALUE_HPP
